@@ -6,71 +6,97 @@
     <title>TAROT SCANNER: RIDER WAITE</title>
     
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort.min.js"></script>
+    
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Roboto:wght@300;400&display=swap" rel="stylesheet">
-    
-    <link rel="icon" href="data:,">
-    
     <style>
         body { margin: 0; background: #0f0f0f; overflow: hidden; font-family: 'Roboto', sans-serif; color: #e0c097; }
         #container { position: relative; width: 100vw; height: 100vh; }
         
         video#input-video { width: 100%; height: 100%; object-fit: cover; display: none; }
-        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5; }
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 
-        /* UI */
+        /* UI ИНТЕРФЕЙС */
         .ui-layer { position: absolute; top:0; left:0; width: 100%; height: 100%; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; z-index: 20; }
+        
         .top-panel { background: rgba(0,0,0,0.85); padding: 15px; pointer-events: auto; border-bottom: 2px solid #e0c097; text-align: center; }
         .app-title { font-family: 'Cinzel', serif; font-size: 22px; color: #e0c097; letter-spacing: 3px; text-shadow: 0 0 10px rgba(224, 192, 151, 0.5); }
+        
         .bottom-panel { padding: 30px; pointer-events: auto; text-align: center; background: linear-gradient(to top, rgba(0,0,0,0.95), transparent); }
         .scan-btn { background: #e0c097; color: #000; border: 4px solid #bba078; width: 85px; height: 85px; border-radius: 50%; font-size: 40px; box-shadow: 0 0 30px rgba(224, 192, 151, 0.4); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: transform 0.1s; }
         .scan-btn:active { transform: scale(0.95); }
 
-        /* HUD */
-        .hud-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; opacity: 0.8; }
-        .crosshair { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 40px; height: 40px; }
-        .crosshair::before, .crosshair::after { content: ''; position: absolute; background: rgba(224, 192, 151, 0.8); }
-        .crosshair::before { top: 19px; left: 0; width: 40px; height: 2px; } 
-        .crosshair::after { top: 0; left: 19px; width: 2px; height: 40px; } 
-        .scan-frame { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80%; height: 60%; border: 2px solid rgba(224, 192, 151, 0.3); border-radius: 20px; box-shadow: 0 0 60px rgba(0,0,0,0.3) inset; animation: breathe 3s infinite ease-in-out; }
+        /* === ОПТИЧЕСКИЙ ПРИЦЕЛ (HUD) === */
+        .hud-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; opacity: 0.7; }
+        
+        /* Центральный крестик */
+        .crosshair {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 40px; height: 40px;
+        }
+        .crosshair::before, .crosshair::after {
+            content: ''; position: absolute; background: rgba(224, 192, 151, 0.6);
+        }
+        .crosshair::before { top: 19px; left: 0; width: 40px; height: 2px; } /* Горизонталь */
+        .crosshair::after { top: 0; left: 19px; width: 2px; height: 40px; } /* Вертикаль */
+
+        /* Угловые рамки */
+        .scan-frame {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 80%; height: 60%;
+            border: 2px solid rgba(224, 192, 151, 0.3);
+            border-radius: 20px;
+            box-shadow: 0 0 50px rgba(0,0,0,0.5) inset;
+            animation: breathe 3s infinite ease-in-out;
+        }
+        /* Уголки рамки */
         .corner { position: absolute; width: 30px; height: 30px; border-color: #e0c097; border-style: solid; border-width: 0; }
         .tl { top: -2px; left: -2px; border-top-width: 4px; border-left-width: 4px; border-radius: 10px 0 0 0; }
         .tr { top: -2px; right: -2px; border-top-width: 4px; border-right-width: 4px; border-radius: 0 10px 0 0; }
         .bl { bottom: -2px; left: -2px; border-bottom-width: 4px; border-left-width: 4px; border-radius: 0 0 0 10px; }
         .br { bottom: -2px; right: -2px; border-bottom-width: 4px; border-right-width: 4px; border-radius: 0 0 10px 0; }
-        @keyframes breathe { 0% { opacity: 0.5; border-color: rgba(224, 192, 151, 0.2); } 50% { opacity: 1; border-color: rgba(224, 192, 151, 0.7); } 100% { opacity: 0.5; border-color: rgba(224, 192, 151, 0.2); } }
+
+        @keyframes breathe {
+            0% { width: 80%; height: 60%; opacity: 0.5; border-color: rgba(224, 192, 151, 0.2); }
+            50% { width: 82%; height: 62%; opacity: 1; border-color: rgba(224, 192, 151, 0.6); }
+            100% { width: 80%; height: 60%; opacity: 0.5; border-color: rgba(224, 192, 151, 0.2); }
+        }
 
         /* РЕЗУЛЬТАТ */
-        #result-box { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #111; z-index: 100; display: none; pointer-events: auto; flex-direction: column; }
+        #result-box { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            background: #111; z-index: 100; display: none; pointer-events: auto;
+            flex-direction: column; 
+        }
+        
         .result-scroll-area { flex: 1; overflow-y: auto; padding: 20px; text-align: center; }
         .cards-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; margin-bottom: 30px; margin-top: 20px;}
+
         .card-item { width: 30%; min-width: 90px; max-width: 140px; display: flex; flex-direction: column; align-items: center; cursor: pointer; }
         .card-visual { width: 100%; border-radius: 6px; border: 1px solid #e0c097; }
         .card-name-mini { font-size: 12px; margin-top: 8px; color: #fff; text-align: center; font-family: 'Cinzel', serif; }
+        
         .close-res { margin: 20px; padding: 15px 40px; background: transparent; color: #e0c097; border: 1px solid #e0c097; font-weight: bold; cursor: pointer; text-transform: uppercase; letter-spacing: 2px; font-family: 'Cinzel', serif; transition: 0.3s; }
+        .close-res:hover { background: #e0c097; color: #000; }
 
         /* ЗУМ */
         #zoom-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.98); z-index: 200; display: none; justify-content: center; align-items: center; flex-direction: column; }
         #zoom-title { color: #e0c097; font-family: 'Cinzel', serif; font-size: 24px; margin-bottom: 20px; }
-        .edit-btn { margin-top: 20px; padding: 12px 25px; background: #333; color: #e0c097; border: 1px solid #e0c097; cursor: pointer; font-family: 'Cinzel', serif; font-size: 14px; letter-spacing: 1px; transition: 0.3s; }
-        .edit-btn:hover { background: #e0c097; color: #000; box-shadow: 0 0 15px #e0c097; }
-
-        /* ВЫБОР КАРТЫ */
-        #card-selector { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0f0f0f; z-index: 300; display: none; flex-direction: column; padding: 20px; box-sizing: border-box; }
-        .selector-header { font-family: 'Cinzel'; color: #e0c097; font-size: 20px; text-align: center; margin-bottom: 20px; border-bottom: 1px solid #e0c097; padding-bottom: 10px; }
-        .selector-grid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; overflow-y: auto; flex: 1; }
-        .selector-item { background: #1a1a1a; padding: 10px; border: 1px solid #444; color: #ccc; cursor: pointer; width: 45%; text-align: center; font-size: 12px; border-radius: 4px; font-family: 'Roboto'; }
-        .selector-item:hover { background: #e0c097; color: #000; border-color: #fff; }
-        .close-selector { margin-top: 10px; padding: 15px; background: transparent; border: 1px solid #e0c097; color: #e0c097; width: 100%; font-family: 'Cinzel'; font-weight: bold; cursor: pointer; }
 
         /* ЭКРАН ЗАГРУЗКИ */
         #start-screen { position: absolute; top:0; left:0; width:100%; height:100%; background:#0f0f0f; z-index:999; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.8s ease; }
         .logo-text { font-family: 'Cinzel', serif; font-size: 32px; color: #e0c097; margin-bottom: 40px; text-align: center; letter-spacing: 4px; border-bottom: 1px solid #e0c097; padding-bottom: 10px; text-shadow: 0 0 15px #e0c097; }
-        #big-start-btn { display: none; padding: 15px 40px; font-size: 16px; background: transparent; color: #e0c097; border: 1px solid #e0c097; text-transform: uppercase; letter-spacing: 2px; cursor: pointer; transition: all 0.3s; }
+        #big-start-btn { padding: 15px 40px; font-size: 16px; background: transparent; color: #e0c097; border: 1px solid #e0c097; text-transform: uppercase; letter-spacing: 2px; cursor: pointer; transition: all 0.3s; }
         
-        .status-text { position: absolute; bottom: 130px; width: 100%; text-align: center; font-size: 18px; font-weight: bold; letter-spacing: 1px; text-shadow: 0 0 5px #000; color: #fff; background: rgba(0,0,0,0.4); padding: 8px; font-family: 'Cinzel', serif; }
-        
-        #loading-text { color: #888; margin-top: 20px; font-size: 14px; font-family: monospace; }
-        #error-log { color: #ff5555; margin-top: 15px; font-size: 13px; max-width: 90%; text-align: center; white-space: pre-wrap; font-family: monospace; background: rgba(50,0,0,0.5); padding: 10px; border-radius: 5px; display: none; }
+        /* 🔥 ОБНОВЛЕННЫЙ СТАТУС */
+        .status-text { 
+            position: absolute; bottom: 130px; width: 100%; text-align: center; 
+            font-size: 20px; /* УВЕЛИЧИЛ ШРИФТ */
+            font-weight: bold; letter-spacing: 1px;
+            text-shadow: 0 0 5px #000; 
+            color: #fff; background: rgba(0,0,0,0.4); padding: 8px; 
+            font-family: 'Cinzel', serif; /* Красивый шрифт */
+        }
+        #error-log { color: #ff5555; margin-top: 15px; font-size: 12px; max-width: 80%; text-align: center; }
     </style>
 </head>
 <body>
@@ -78,9 +104,9 @@
     <div id="container">
         <div id="start-screen">
             <div class="logo-text">RIDER WAITE<br>TRIPLET</div>
-            <div id="loading-text">Инициализация...</div>
+            <button id="big-start-btn" onclick="initSystem()">START SESSION</button>
+            <div id="loading-text" style="color: #666; margin-top: 15px; font-size: 12px; display: none;">Загрузка нейросети (Hardcore)...</div>
             <div id="error-log"></div>
-            <button id="big-start-btn" onclick="location.reload()">ПОВТОРИТЬ</button>
         </div>
 
         <video id="input-video" playsinline muted autoplay></video>
@@ -88,14 +114,18 @@
         
         <div class="hud-layer">
             <div class="scan-frame">
-                <div class="corner tl"></div><div class="corner tr"></div>
-                <div class="corner bl"></div><div class="corner br"></div>
+                <div class="corner tl"></div>
+                <div class="corner tr"></div>
+                <div class="corner bl"></div>
+                <div class="corner br"></div>
             </div>
             <div class="crosshair"></div>
         </div>
         
         <div class="ui-layer">
-            <div class="top-panel"><div class="app-title">RIDER HARDCORE</div></div>
+            <div class="top-panel">
+                <div class="app-title">RIDER HARDCORE</div>
+            </div>
             <div id="status" class="status-text">ОЖИДАНИЕ...</div>
             <div class="bottom-panel"><button class="scan-btn" onclick="captureRead()">📷</button></div>
         </div>
@@ -104,29 +134,25 @@
             <div class="result-scroll-area">
                 <h2 style="color: #e0c097; font-family: 'Cinzel'; margin-bottom: 10px;">РАСКЛАД</h2>
                 <div id="cards-container" class="cards-row"></div>
-                <div style="color: #888; font-size: 12px; margin-top: 20px;">* Если ошибка - нажмите на карту.</div>
+                <div style="color: #888; font-size: 12px; margin-top: 20px;">
+                    * Система работает с прямыми картами.<br>Перевернутые карты определяются как прямые.
+                </div>
             </div>
             <button class="close-res" onclick="closeResult()">НОВЫЙ СКАН</button>
         </div>
 
-        <div id="zoom-modal">
+        <div id="zoom-modal" onclick="closeZoom()">
             <div id="zoom-title">Карта</div>
             <div id="zoom-media-placeholder"></div>
-            <button class="edit-btn" onclick="openCardSelector()">⚠️ ОШИБКА? ЗАМЕНИТЬ</button>
-            <p style="color: #777; margin-top: 20px; font-size: 12px; cursor: pointer;" onclick="closeZoom()">(Закрыть)</p>
-        </div>
-
-        <div id="card-selector">
-            <div class="selector-header">ВЫБЕРИТЕ КАРТУ</div>
-            <div id="selector-grid" class="selector-grid"></div>
-            <button class="close-selector" onclick="closeCardSelector()">ОТМЕНА</button>
         </div>
     </div>
 
     <script>
-        // 1. БАЗА КАРТ (RIDER WAITE)
+        // === 1. АВТО-ГЕНЕРАЦИЯ БАЗЫ КАРТ (RIDER WAITE) ===
         const BASE_IMG_URL = "https://raw.githubusercontent.com/marataitester-blip/rider-tarot-card/main/Cards-jpg/Cards-jpg/";
         const TAROT_DATA = [];
+
+        // Старшие (0-21)
         const majors = [
             {n:"Шут", f:"00-TheFool.jpg"}, {n:"Маг", f:"01-TheMagician.jpg"}, {n:"Жрица", f:"02-TheHighPriestess.jpg"},
             {n:"Императрица", f:"03-TheEmpress.jpg"}, {n:"Император", f:"04-TheEmperor.jpg"}, {n:"Жрец", f:"05-TheHierophant.jpg"},
@@ -138,62 +164,74 @@
             {n:"Мир", f:"21-TheWorld.jpg"}
         ];
         majors.forEach(m => TAROT_DATA.push({ name: m.n, image: BASE_IMG_URL + m.f }));
-        const suits = [{id: 'Wands', ru: 'Жезлов'}, {id: 'Cups', ru: 'Кубков'}, {id: 'Swords', ru: 'Мечей'}, {id: 'Pentacles', ru: 'Пентаклей'}];
+
+        // Младшие (22-77)
+        const suits = [
+            {id: 'Wands', ru: 'Жезлов'}, {id: 'Cups', ru: 'Кубков'}, 
+            {id: 'Swords', ru: 'Мечей'}, {id: 'Pentacles', ru: 'Пентаклей'}
+        ];
         const ranks = ['Туз', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'Паж', 'Рыцарь', 'Королева', 'Король'];
+        
         suits.forEach(s => {
             ranks.forEach((r, idx) => {
                 const num = (idx + 1).toString().padStart(2, '0');
-                TAROT_DATA.push({ name: `${r} ${s.ru}`, image: BASE_IMG_URL + `${s.id}${num}.jpg` });
+                const fileName = `${s.id}${num}.jpg`;
+                TAROT_DATA.push({ name: `${r} ${s.ru}`, image: BASE_IMG_URL + fileName });
             });
         });
 
-        // 2. НАСТРОЙКИ (CDN ССЫЛКА ДЛЯ НАДЕЖНОСТИ)
-        // 🔥 Берем файл прямо с GitHub, минуя Vercel
-        const MODEL_PATH = 'https://cdn.jsdelivr.net/gh/marataitester-blip/rider-scanner@main/rider_hardcore.onnx'; 
-        const MODEL_SIZE = 800; 
+        // === 2. НАСТРОЙКИ (HARDCORE 800) ===
+        const MODEL_PATH = 'rider_hardcore.onnx'; // Убедись, что файл так называется!
+        const MODEL_SIZE = 800; // Хардкор требует 800px
         const CONFIDENCE = 0.25; 
         const NMS_THRESHOLD = 0.50;
 
         let session;
         let detectedCards = []; 
-        let currentZoomIndex = -1; 
         const status = document.getElementById('status');
-        const logText = document.getElementById('loading-text');
 
-        ort.env.wasm.numThreads = 2; ort.env.wasm.simd = false;
+        ort.env.wasm.numThreads = 2; 
+        ort.env.wasm.simd = false;
 
         async function initSystem() {
             const btn = document.getElementById('big-start-btn');
-            const errLog = document.getElementById('error-log');
+            const loadText = document.getElementById('loading-text');
+            const errorLog = document.getElementById('error-log');
             
+            btn.style.display = 'none';
+            loadText.style.display = 'block';
+            errorLog.innerText = "";
+
             try {
-                logText.innerText = "1/3: Запрос камеры...";
+                // Камера
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: 'environment', width: {ideal: 1280}, height: {ideal: 720} }, 
                     audio: false 
                 });
+                
                 const video = document.getElementById('input-video');
                 video.srcObject = stream;
                 video.style.display = 'block'; 
                 await new Promise(r => video.onloadedmetadata = r);
 
-                logText.innerText = "2/3: Скачивание модели (через CDN)...";
-                // Используем сессию напрямую
+                // Загрузка
                 session = await ort.InferenceSession.create(MODEL_PATH, { executionProviders: ['wasm'] });
 
-                logText.innerText = "3/3: Запуск...";
                 document.getElementById('start-screen').style.opacity = '0';
                 setTimeout(() => { document.getElementById('start-screen').style.display = 'none'; }, 800);
-                
-                status.innerText = "ПОИСК ЦЕЛИ..."; status.style.color = "#888";
+
+                status.innerText = "ПОИСК ЦЕЛИ...";
+                status.style.color = "#888";
                 detectFrame(video);
 
             } catch (e) {
                 console.error(e);
-                logText.style.display = 'none';
-                errLog.style.display = 'block';
-                errLog.innerText = "ОШИБКА ЗАГРУЗКИ:\n" + e.message;
+                loadText.style.display = 'none';
                 btn.style.display = 'inline-block';
+                btn.innerText = "ПОВТОРИТЬ";
+                
+                errorLog.innerText = "ОШИБКА: " + e.message;
+                if(e.message.includes("404")) errorLog.innerText += "\n(Файл " + MODEL_PATH + " не найден)";
             }
         }
 
@@ -203,125 +241,132 @@
             mat.width = MODEL_SIZE; mat.height = MODEL_SIZE;
             mat.getContext('2d').drawImage(video, 0, 0, MODEL_SIZE, MODEL_SIZE);
             const data = mat.getContext('2d').getImageData(0,0,MODEL_SIZE,MODEL_SIZE).data;
+            
             const input = new Float32Array(3 * MODEL_SIZE * MODEL_SIZE);
             for (let i=0; i<MODEL_SIZE*MODEL_SIZE; i++) {
-                input[i] = data[i*4]/255.0; input[MODEL_SIZE*MODEL_SIZE+i] = data[i*4+1]/255.0; input[2*MODEL_SIZE*MODEL_SIZE+i] = data[i*4+2]/255.0;
+                input[i] = data[i*4]/255.0;
+                input[MODEL_SIZE*MODEL_SIZE+i] = data[i*4+1]/255.0;
+                input[2*MODEL_SIZE*MODEL_SIZE+i] = data[i*4+2]/255.0;
             }
             const tensor = new ort.Tensor('float32', input, [1, 3, MODEL_SIZE, MODEL_SIZE]);
 
             try {
                 const results = await session.run({ [session.inputNames[0]]: tensor });
                 const output = results[session.outputNames[0]].data;
-                const rawCards = processAndDraw(output, canvas, video.videoWidth, video.videoHeight);
+                detectedCards = processAndDraw(output, canvas, video.videoWidth, video.videoHeight);
                 
-                if (document.getElementById('result-box').style.display === 'none') {
-                    detectedCards = rawCards;
-                    if (detectedCards.length > 0) {
-                        status.innerText = `ЗАХВАЧЕНО: ${detectedCards.length}`;
-                        status.style.color = "#d4af37"; status.style.textShadow = "0 0 10px #d4af37";
-                    } else {
-                        status.innerText = "ПОИСК...";
-                        status.style.color = "#888"; status.style.textShadow = "none";
-                    }
+                if (detectedCards.length > 0) {
+                    status.innerText = `ЗАХВАЧЕНО КАРТ: ${detectedCards.length}`;
+                    status.style.color = "#d4af37";
+                    status.style.textShadow = "0 0 10px #d4af37";
+                } else {
+                    status.innerText = "ПОИСК ЦЕЛИ...";
+                    status.style.color = "#888";
+                    status.style.textShadow = "none";
                 }
             } catch (e) { console.error(e); }
+            
             setTimeout(() => requestAnimationFrame(() => detectFrame(video)), 50);
         }
 
         function processAndDraw(data, canvas, vW, vH) {
-            const ctx = canvas.getContext('2d'); ctx.clearRect(0,0,vW,vH);
-            const numClasses = 78; const channels = numClasses + 4; const dynamicAnchors = data.length / channels; 
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0,0,vW,vH);
+            
+            const numClasses = 78; // Rider Waite - 78 classes
+            const channels = numClasses + 4; 
+            const dynamicAnchors = data.length / channels; 
+            
             let boxes = [];
             for (let i=0; i<dynamicAnchors; i++) {
-                let maxConf = 0; let classIdx = 0;
-                for(let c=4; c<channels; c++) { const val = data[c*dynamicAnchors+i]; if(val > maxConf) { maxConf = val; classIdx = c-4; } }
+                let maxConf = 0;
+                let classIdx = 0;
+                for(let c=4; c<channels; c++) {
+                    const val = data[c*dynamicAnchors+i];
+                    if(val > maxConf) { maxConf = val; classIdx = c-4; }
+                }
                 if (maxConf > CONFIDENCE) { 
                     const x = data[0*dynamicAnchors+i]; const y = data[1*dynamicAnchors+i];
                     const w = data[2*dynamicAnchors+i]; const h = data[3*dynamicAnchors+i];
                     boxes.push({ x: x, y: y, w: w, h: h, score: maxConf, classId: classIdx });
                 }
             }
+
             boxes.sort((a,b) => b.score - a.score);
             const cleanBoxes = [];
             while(boxes.length > 0) {
-                const best = boxes.shift(); cleanBoxes.push(best);
+                const best = boxes.shift();
+                cleanBoxes.push(best);
                 boxes = boxes.filter(b => {
-                    const x1 = Math.max(best.x - best.w/2, b.x - b.w/2); const y1 = Math.max(best.y - best.h/2, b.y - b.h/2);
-                    const x2 = Math.min(best.x + best.w/2, b.x + b.w/2); const y2 = Math.min(best.y + best.h/2, b.y + b.h/2);
+                    const x1 = Math.max(best.x - best.w/2, b.x - b.w/2);
+                    const y1 = Math.max(best.y - best.h/2, b.y - b.h/2);
+                    const x2 = Math.min(best.x + best.w/2, b.x + b.w/2);
+                    const y2 = Math.min(best.y + best.h/2, b.y + b.h/2);
+                    const inter = (Math.min(x2,x2) - Math.max(x1,x1)) * (Math.min(y2,y2) - Math.max(y1,y1)); 
                     if (x2 < x1 || y2 < y1) return true;
-                    return ((x2-x1)*(y2-y1)) / (best.w*best.h + b.w*b.h - (x2-x1)*(y2-y1)) < NMS_THRESHOLD;
+                    const areaI = (x2-x1)*(y2-y1);
+                    const areaU = best.w*best.h + b.w*b.h - areaI;
+                    return (areaI/areaU) < NMS_THRESHOLD;
                 });
             }
-            const sx = vW/MODEL_SIZE; const sy = vH/MODEL_SIZE; const finalCards = [];
-            ctx.lineWidth = 3; ctx.font = "bold 16px Roboto"; 
+
+            const sx = vW/MODEL_SIZE; const sy = vH/MODEL_SIZE;
+            const finalCards = [];
+
+            ctx.lineWidth = 2; ctx.font = "16px Roboto"; 
+            
             cleanBoxes.forEach(box => {
-                const realX = (box.x - box.w/2) * sx; const realY = (box.y - box.h/2) * sy;
-                ctx.strokeStyle = "rgba(224, 192, 151, 0.8)"; ctx.strokeRect(realX, realY, box.w * sx, box.h * sy);
+                const realX = (box.x - box.w/2) * sx;
+                const realY = (box.y - box.h/2) * sy;
+                const realW = box.w * sx;
+                const realH = box.h * sy;
+
+                ctx.strokeStyle = "rgba(224, 192, 151, 0.8)";
+                ctx.strokeRect(realX, realY, realW, realH);
+                
                 let card = TAROT_DATA[box.classId];
                 if(card) {
                     finalCards.push({ id: box.classId, x: realX, name: card.name, image: card.image });
-                    ctx.fillStyle = "#d4af37"; ctx.fillText(card.name, realX, realY - 10);
                 }
             });
+
+            // Уникализация и отрисовка имен
             const unique = []; const seen = new Set();
-            for (const c of finalCards) { if (!seen.has(c.id)) { seen.add(c.id); unique.push(c); } }
+            for (const c of finalCards) {
+                if (!seen.has(c.id)) { seen.add(c.id); unique.push(c); }
+            }
             return unique;
         }
 
         function captureRead() {
             if (detectedCards.length === 0) { alert("Камера не видит карты!"); return; }
-            detectedCards.sort((a, b) => a.x - b.x); 
-            renderResult();
-            document.getElementById('result-box').style.display = 'flex';
-        }
+            
+            // 🔥 СОРТИРОВКА СЛЕВА НАПРАВО (Критично для триплетов)
+            detectedCards.sort((a, b) => a.x - b.x);
 
-        function renderResult() {
             const container = document.getElementById('cards-container');
             container.innerHTML = "";
-            detectedCards.forEach((c, index) => { 
+
+            detectedCards.forEach(c => {
                 const div = document.createElement('div');
                 div.className = 'card-item';
-                div.onclick = () => openZoom(index);
+                div.onclick = () => openZoom(c);
                 div.innerHTML = `<img src="${c.image}" class="card-visual"><div class="card-name-mini">${c.name}</div>`;
                 container.appendChild(div);
             });
+
+            document.getElementById('result-box').style.display = 'flex';
         }
 
         function closeResult() { document.getElementById('result-box').style.display = 'none'; }
         
-        function openZoom(index) {
-            currentZoomIndex = index;
-            const card = detectedCards[index];
+        function openZoom(card) {
             const modal = document.getElementById('zoom-modal');
-            document.getElementById('zoom-media-placeholder').innerHTML = `<img src="${card.image}" style="max-width: 90vw; max-height: 70vh; border: 2px solid #e0c097;">`;
-            document.getElementById('zoom-title').innerText = card.name;
+            const placeholder = document.getElementById('zoom-media-placeholder');
+            placeholder.innerHTML = `<img src="${card.image}" style="max-width: 90vw; max-height: 70vh; border: 2px solid #e0c097;">`;
             modal.style.display = 'flex';
         }
         function closeZoom() { document.getElementById('zoom-modal').style.display = 'none'; }
-
-        function openCardSelector() {
-            const grid = document.getElementById('selector-grid');
-            grid.innerHTML = "";
-            TAROT_DATA.forEach((card, dbIndex) => {
-                const div = document.createElement('div');
-                div.className = 'selector-item';
-                div.innerText = card.name;
-                div.onclick = () => selectNewCard(dbIndex);
-                grid.appendChild(div);
-            });
-            document.getElementById('card-selector').style.display = 'flex';
-        }
-
-        function selectNewCard(dbIndex) {
-            const newCard = TAROT_DATA[dbIndex];
-            const oldCard = detectedCards[currentZoomIndex];
-            detectedCards[currentZoomIndex] = { id: dbIndex, x: oldCard.x, name: newCard.name, image: newCard.image };
-            closeCardSelector();
-            closeZoom();
-            renderResult();
-        }
-
-        function closeCardSelector() { document.getElementById('card-selector').style.display = 'none'; }
     </script>
 </body>
 </html>
