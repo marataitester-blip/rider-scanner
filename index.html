@@ -15,15 +15,51 @@
         video#input-video { width: 100%; height: 100%; object-fit: cover; display: none; }
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 
-        /* UI для Школ (Строгий, Классический) */
-        .ui-layer { position: absolute; top:0; left:0; width: 100%; height: 100%; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; }
+        /* UI ИНТЕРФЕЙС */
+        .ui-layer { position: absolute; top:0; left:0; width: 100%; height: 100%; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; z-index: 20; }
         
-        .top-panel { background: rgba(0,0,0,0.85); padding: 20px; pointer-events: auto; border-bottom: 2px solid #e0c097; text-align: center; }
-        .app-title { font-family: 'Cinzel', serif; font-size: 20px; color: #e0c097; letter-spacing: 2px; }
+        .top-panel { background: rgba(0,0,0,0.85); padding: 15px; pointer-events: auto; border-bottom: 2px solid #e0c097; text-align: center; }
+        .app-title { font-family: 'Cinzel', serif; font-size: 22px; color: #e0c097; letter-spacing: 3px; text-shadow: 0 0 10px rgba(224, 192, 151, 0.5); }
         
-        .bottom-panel { padding: 30px; pointer-events: auto; text-align: center; background: linear-gradient(to top, rgba(0,0,0,0.9), transparent); }
-        .scan-btn { background: #e0c097; color: #000; border: 4px solid #bba078; width: 80px; height: 80px; border-radius: 50%; font-size: 36px; box-shadow: 0 0 25px rgba(224, 192, 151, 0.3); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: transform 0.1s; }
+        .bottom-panel { padding: 30px; pointer-events: auto; text-align: center; background: linear-gradient(to top, rgba(0,0,0,0.95), transparent); }
+        .scan-btn { background: #e0c097; color: #000; border: 4px solid #bba078; width: 85px; height: 85px; border-radius: 50%; font-size: 40px; box-shadow: 0 0 30px rgba(224, 192, 151, 0.4); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: transform 0.1s; }
         .scan-btn:active { transform: scale(0.95); }
+
+        /* === ОПТИЧЕСКИЙ ПРИЦЕЛ (HUD) === */
+        .hud-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; opacity: 0.7; }
+        
+        /* Центральный крестик */
+        .crosshair {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 40px; height: 40px;
+        }
+        .crosshair::before, .crosshair::after {
+            content: ''; position: absolute; background: rgba(224, 192, 151, 0.6);
+        }
+        .crosshair::before { top: 19px; left: 0; width: 40px; height: 2px; } /* Горизонталь */
+        .crosshair::after { top: 0; left: 19px; width: 2px; height: 40px; } /* Вертикаль */
+
+        /* Угловые рамки */
+        .scan-frame {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 80%; height: 60%;
+            border: 2px solid rgba(224, 192, 151, 0.3);
+            border-radius: 20px;
+            box-shadow: 0 0 50px rgba(0,0,0,0.5) inset;
+            animation: breathe 3s infinite ease-in-out;
+        }
+        /* Уголки рамки */
+        .corner { position: absolute; width: 30px; height: 30px; border-color: #e0c097; border-style: solid; border-width: 0; }
+        .tl { top: -2px; left: -2px; border-top-width: 4px; border-left-width: 4px; border-radius: 10px 0 0 0; }
+        .tr { top: -2px; right: -2px; border-top-width: 4px; border-right-width: 4px; border-radius: 0 10px 0 0; }
+        .bl { bottom: -2px; left: -2px; border-bottom-width: 4px; border-left-width: 4px; border-radius: 0 0 0 10px; }
+        .br { bottom: -2px; right: -2px; border-bottom-width: 4px; border-right-width: 4px; border-radius: 0 0 10px 0; }
+
+        @keyframes breathe {
+            0% { width: 80%; height: 60%; opacity: 0.5; border-color: rgba(224, 192, 151, 0.2); }
+            50% { width: 82%; height: 62%; opacity: 1; border-color: rgba(224, 192, 151, 0.6); }
+            100% { width: 80%; height: 60%; opacity: 0.5; border-color: rgba(224, 192, 151, 0.2); }
+        }
 
         /* РЕЗУЛЬТАТ */
         #result-box { 
@@ -48,9 +84,18 @@
 
         /* ЭКРАН ЗАГРУЗКИ */
         #start-screen { position: absolute; top:0; left:0; width:100%; height:100%; background:#0f0f0f; z-index:999; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.8s ease; }
-        .logo-text { font-family: 'Cinzel', serif; font-size: 32px; color: #e0c097; margin-bottom: 40px; text-align: center; letter-spacing: 4px; border-bottom: 1px solid #e0c097; padding-bottom: 10px; }
+        .logo-text { font-family: 'Cinzel', serif; font-size: 32px; color: #e0c097; margin-bottom: 40px; text-align: center; letter-spacing: 4px; border-bottom: 1px solid #e0c097; padding-bottom: 10px; text-shadow: 0 0 15px #e0c097; }
         #big-start-btn { padding: 15px 40px; font-size: 16px; background: transparent; color: #e0c097; border: 1px solid #e0c097; text-transform: uppercase; letter-spacing: 2px; cursor: pointer; transition: all 0.3s; }
-        .status-text { position: absolute; bottom: 120px; width: 100%; text-align: center; font-size: 14px; text-shadow: 1px 1px 2px black; color: #ddd; background: rgba(0,0,0,0.4); padding: 5px; }
+        
+        /* 🔥 ОБНОВЛЕННЫЙ СТАТУС */
+        .status-text { 
+            position: absolute; bottom: 130px; width: 100%; text-align: center; 
+            font-size: 20px; /* УВЕЛИЧИЛ ШРИФТ */
+            font-weight: bold; letter-spacing: 1px;
+            text-shadow: 0 0 5px #000; 
+            color: #fff; background: rgba(0,0,0,0.4); padding: 8px; 
+            font-family: 'Cinzel', serif; /* Красивый шрифт */
+        }
         #error-log { color: #ff5555; margin-top: 15px; font-size: 12px; max-width: 80%; text-align: center; }
     </style>
 </head>
@@ -58,20 +103,30 @@
 
     <div id="container">
         <div id="start-screen">
-            <div class="logo-text">RIDER WAITE<br>SCANNER</div>
+            <div class="logo-text">RIDER WAITE<br>TRIPLET</div>
             <button id="big-start-btn" onclick="initSystem()">START SESSION</button>
-            <div id="loading-text" style="color: #666; margin-top: 15px; font-size: 12px; display: none;">Загрузка нейросети...</div>
+            <div id="loading-text" style="color: #666; margin-top: 15px; font-size: 12px; display: none;">Загрузка нейросети (Hardcore)...</div>
             <div id="error-log"></div>
         </div>
 
         <video id="input-video" playsinline muted autoplay></video>
         <canvas id="canvas"></canvas>
         
+        <div class="hud-layer">
+            <div class="scan-frame">
+                <div class="corner tl"></div>
+                <div class="corner tr"></div>
+                <div class="corner bl"></div>
+                <div class="corner br"></div>
+            </div>
+            <div class="crosshair"></div>
+        </div>
+        
         <div class="ui-layer">
             <div class="top-panel">
-                <div class="app-title">CLASSIC TAROT</div>
+                <div class="app-title">RIDER HARDCORE</div>
             </div>
-            <div id="status" class="status-text">Ожидание камеры...</div>
+            <div id="status" class="status-text">ОЖИДАНИЕ...</div>
             <div class="bottom-panel"><button class="scan-btn" onclick="captureRead()">📷</button></div>
         </div>
 
@@ -94,7 +149,6 @@
 
     <script>
         // === 1. АВТО-ГЕНЕРАЦИЯ БАЗЫ КАРТ (RIDER WAITE) ===
-        // Мы используем ту же логику, что и при тренировке, чтобы подтянуть картинки с твоего GitHub
         const BASE_IMG_URL = "https://raw.githubusercontent.com/marataitester-blip/rider-tarot-card/main/Cards-jpg/Cards-jpg/";
         const TAROT_DATA = [];
 
@@ -120,17 +174,16 @@
         
         suits.forEach(s => {
             ranks.forEach((r, idx) => {
-                // Формируем имя файла: Wands01.jpg, Wands14.jpg
                 const num = (idx + 1).toString().padStart(2, '0');
                 const fileName = `${s.id}${num}.jpg`;
                 TAROT_DATA.push({ name: `${r} ${s.ru}`, image: BASE_IMG_URL + fileName });
             });
         });
 
-        // === 2. НАСТРОЙКИ ===
-        const MODEL_PATH = 'rider_hardcore.onnx'; // 🔥 ЖДЕМ ЭТОТ ФАЙЛ С KAGGLE
-        const MODEL_SIZE = 800; 
-        const CONFIDENCE = 0.25; // Лояльность для учеников
+        // === 2. НАСТРОЙКИ (HARDCORE 800) ===
+        const MODEL_PATH = 'rider_hardcore.onnx'; // Убедись, что файл так называется!
+        const MODEL_SIZE = 800; // Хардкор требует 800px
+        const CONFIDENCE = 0.25; 
         const NMS_THRESHOLD = 0.50;
 
         let session;
@@ -161,13 +214,14 @@
                 video.style.display = 'block'; 
                 await new Promise(r => video.onloadedmetadata = r);
 
-                // Загрузка (RIDER HARDCORE)
+                // Загрузка
                 session = await ort.InferenceSession.create(MODEL_PATH, { executionProviders: ['wasm'] });
 
                 document.getElementById('start-screen').style.opacity = '0';
                 setTimeout(() => { document.getElementById('start-screen').style.display = 'none'; }, 800);
 
-                status.innerText = "Сканер активен";
+                status.innerText = "ПОИСК ЦЕЛИ...";
+                status.style.color = "#888";
                 detectFrame(video);
 
             } catch (e) {
@@ -202,15 +256,17 @@
                 detectedCards = processAndDraw(output, canvas, video.videoWidth, video.videoHeight);
                 
                 if (detectedCards.length > 0) {
-                    status.innerText = `Найдено карт: ${detectedCards.length}`;
-                    status.style.color = "#e0c097";
+                    status.innerText = `ЗАХВАЧЕНО КАРТ: ${detectedCards.length}`;
+                    status.style.color = "#d4af37";
+                    status.style.textShadow = "0 0 10px #d4af37";
                 } else {
-                    status.innerText = "Наведите на карты...";
+                    status.innerText = "ПОИСК ЦЕЛИ...";
                     status.style.color = "#888";
+                    status.style.textShadow = "none";
                 }
             } catch (e) { console.error(e); }
             
-            setTimeout(() => requestAnimationFrame(() => detectFrame(video)), 50); // Чуть медленнее для экономии батареи
+            setTimeout(() => requestAnimationFrame(() => detectFrame(video)), 50);
         }
 
         function processAndDraw(data, canvas, vW, vH) {
@@ -246,8 +302,7 @@
                     const y1 = Math.max(best.y - best.h/2, b.y - b.h/2);
                     const x2 = Math.min(best.x + best.w/2, b.x + b.w/2);
                     const y2 = Math.min(best.y + best.h/2, b.y + b.h/2);
-                    const inter = (Math.min(x2,x2) - Math.max(x1,x1)) * (Math.min(y2,y2) - Math.max(y1,y1)); // simplified
-                    // Правильный IOU
+                    const inter = (Math.min(x2,x2) - Math.max(x1,x1)) * (Math.min(y2,y2) - Math.max(y1,y1)); 
                     if (x2 < x1 || y2 < y1) return true;
                     const areaI = (x2-x1)*(y2-y1);
                     const areaU = best.w*best.h + b.w*b.h - areaI;
