@@ -6,8 +6,10 @@
     <title>TAROT SCANNER: RIDER WAITE</title>
     
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort.min.js"></script>
-    
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Roboto:wght@300;400&display=swap" rel="stylesheet">
+    
+    <link rel="icon" href="data:,">
+    
     <style>
         body { margin: 0; background: #0f0f0f; overflow: hidden; font-family: 'Roboto', sans-serif; color: #e0c097; }
         #container { position: relative; width: 100vw; height: 100vh; }
@@ -20,8 +22,6 @@
         .top-panel { background: rgba(0,0,0,0.85); padding: 15px; pointer-events: auto; border-bottom: 2px solid #e0c097; text-align: center; }
         .app-title { font-family: 'Cinzel', serif; font-size: 22px; color: #e0c097; letter-spacing: 3px; text-shadow: 0 0 10px rgba(224, 192, 151, 0.5); }
         .bottom-panel { padding: 30px; pointer-events: auto; text-align: center; background: linear-gradient(to top, rgba(0,0,0,0.95), transparent); }
-        
-        /* КНОПКА СКАНА */
         .scan-btn { background: #e0c097; color: #000; border: 4px solid #bba078; width: 85px; height: 85px; border-radius: 50%; font-size: 40px; box-shadow: 0 0 30px rgba(224, 192, 151, 0.4); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: transform 0.1s; }
         .scan-btn:active { transform: scale(0.95); }
 
@@ -52,12 +52,14 @@
         #zoom-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.98); z-index: 200; display: none; justify-content: center; align-items: center; flex-direction: column; }
         #zoom-title { color: #e0c097; font-family: 'Cinzel', serif; font-size: 24px; margin-bottom: 20px; }
         .edit-btn { margin-top: 20px; padding: 12px 25px; background: #333; color: #e0c097; border: 1px solid #e0c097; cursor: pointer; font-family: 'Cinzel', serif; font-size: 14px; letter-spacing: 1px; transition: 0.3s; }
-        
-        /* ВЫБОР */
+        .edit-btn:hover { background: #e0c097; color: #000; box-shadow: 0 0 15px #e0c097; }
+
+        /* ВЫБОР КАРТЫ */
         #card-selector { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0f0f0f; z-index: 300; display: none; flex-direction: column; padding: 20px; box-sizing: border-box; }
         .selector-header { font-family: 'Cinzel'; color: #e0c097; font-size: 20px; text-align: center; margin-bottom: 20px; border-bottom: 1px solid #e0c097; padding-bottom: 10px; }
         .selector-grid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; overflow-y: auto; flex: 1; }
         .selector-item { background: #1a1a1a; padding: 10px; border: 1px solid #444; color: #ccc; cursor: pointer; width: 45%; text-align: center; font-size: 12px; border-radius: 4px; font-family: 'Roboto'; }
+        .selector-item:hover { background: #e0c097; color: #000; border-color: #fff; }
         .close-selector { margin-top: 10px; padding: 15px; background: transparent; border: 1px solid #e0c097; color: #e0c097; width: 100%; font-family: 'Cinzel'; font-weight: bold; cursor: pointer; }
 
         /* ЭКРАН ЗАГРУЗКИ */
@@ -67,7 +69,6 @@
         
         .status-text { position: absolute; bottom: 130px; width: 100%; text-align: center; font-size: 18px; font-weight: bold; letter-spacing: 1px; text-shadow: 0 0 5px #000; color: #fff; background: rgba(0,0,0,0.4); padding: 8px; font-family: 'Cinzel', serif; }
         
-        /* ЛОГ ЗАГРУЗКИ (ВИДИМЫЙ) */
         #loading-text { color: #888; margin-top: 20px; font-size: 14px; font-family: monospace; }
         #error-log { color: #ff5555; margin-top: 15px; font-size: 13px; max-width: 90%; text-align: center; white-space: pre-wrap; font-family: monospace; background: rgba(50,0,0,0.5); padding: 10px; border-radius: 5px; display: none; }
     </style>
@@ -123,7 +124,7 @@
     </div>
 
     <script>
-        // 1. БАЗА
+        // 1. БАЗА КАРТ (RIDER WAITE)
         const BASE_IMG_URL = "https://raw.githubusercontent.com/marataitester-blip/rider-tarot-card/main/Cards-jpg/Cards-jpg/";
         const TAROT_DATA = [];
         const majors = [
@@ -146,8 +147,9 @@
             });
         });
 
-        // 2. НАСТРОЙКИ
-        const MODEL_PATH = './rider_hardcore.onnx'; 
+        // 2. НАСТРОЙКИ (CDN ССЫЛКА ДЛЯ НАДЕЖНОСТИ)
+        // 🔥 Берем файл прямо с GitHub, минуя Vercel
+        const MODEL_PATH = 'https://cdn.jsdelivr.net/gh/marataitester-blip/rider-scanner@main/rider_hardcore.onnx'; 
         const MODEL_SIZE = 800; 
         const CONFIDENCE = 0.25; 
         const NMS_THRESHOLD = 0.50;
@@ -175,9 +177,8 @@
                 video.style.display = 'block'; 
                 await new Promise(r => video.onloadedmetadata = r);
 
-                logText.innerText = "2/3: Загрузка модели (может занять время)...";
-                
-                // ПРЯМАЯ ЗАГРУЗКА БЕЗ ПРОВЕРОК FETCH (ЧТОБЫ НЕ БЫЛО CORS ОШИБОК)
+                logText.innerText = "2/3: Скачивание модели (через CDN)...";
+                // Используем сессию напрямую
                 session = await ort.InferenceSession.create(MODEL_PATH, { executionProviders: ['wasm'] });
 
                 logText.innerText = "3/3: Запуск...";
@@ -191,12 +192,7 @@
                 console.error(e);
                 logText.style.display = 'none';
                 errLog.style.display = 'block';
-                errLog.innerText = "ОШИБКА:\n" + e.message;
-                
-                if(e.message.includes("protobuf")) {
-                    errLog.innerText += "\n\n(Скорее всего, файл модели не скачался полностью. Проверьте Git LFS)";
-                }
-                
+                errLog.innerText = "ОШИБКА ЗАГРУЗКИ:\n" + e.message;
                 btn.style.display = 'inline-block';
             }
         }
