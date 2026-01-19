@@ -28,32 +28,18 @@
         /* === ОПТИЧЕСКИЙ ПРИЦЕЛ (HUD) === */
         .hud-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; opacity: 0.7; }
         
-        /* Центральный крестик */
         .crosshair { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 40px; height: 40px; }
         .crosshair::before, .crosshair::after { content: ''; position: absolute; background: rgba(224, 192, 151, 0.6); }
         .crosshair::before { top: 19px; left: 0; width: 40px; height: 2px; } 
-        .crosshair::after { top: 0; left: 19px; width: 2px; height: 40px; }
+        .crosshair::after { top: 0; left: 19px; width: 2px; height: 40px; } 
 
-        /* Рамка */
-        .scan-frame {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 80%; height: 60%;
-            border: 2px solid rgba(224, 192, 151, 0.3);
-            border-radius: 20px;
-            box-shadow: 0 0 50px rgba(0,0,0,0.5) inset;
-            animation: breathe 3s infinite ease-in-out;
-        }
+        .scan-frame { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80%; height: 60%; border: 2px solid rgba(224, 192, 151, 0.3); border-radius: 20px; box-shadow: 0 0 50px rgba(0,0,0,0.5) inset; animation: breathe 3s infinite ease-in-out; }
         .corner { position: absolute; width: 30px; height: 30px; border-color: #e0c097; border-style: solid; border-width: 0; }
         .tl { top: -2px; left: -2px; border-top-width: 4px; border-left-width: 4px; border-radius: 10px 0 0 0; }
         .tr { top: -2px; right: -2px; border-top-width: 4px; border-right-width: 4px; border-radius: 0 10px 0 0; }
         .bl { bottom: -2px; left: -2px; border-bottom-width: 4px; border-left-width: 4px; border-radius: 0 0 0 10px; }
         .br { bottom: -2px; right: -2px; border-bottom-width: 4px; border-right-width: 4px; border-radius: 0 0 10px 0; }
-
-        @keyframes breathe {
-            0% { width: 80%; height: 60%; opacity: 0.5; border-color: rgba(224, 192, 151, 0.2); }
-            50% { width: 82%; height: 62%; opacity: 1; border-color: rgba(224, 192, 151, 0.6); }
-            100% { width: 80%; height: 60%; opacity: 0.5; border-color: rgba(224, 192, 151, 0.2); }
-        }
+        @keyframes breathe { 0% { opacity: 0.5; border-color: rgba(224, 192, 151, 0.2); } 50% { opacity: 1; border-color: rgba(224, 192, 151, 0.6); } 100% { opacity: 0.5; border-color: rgba(224, 192, 151, 0.2); } }
 
         /* РЕЗУЛЬТАТ */
         #result-box { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #111; z-index: 100; display: none; pointer-events: auto; flex-direction: column; }
@@ -69,7 +55,7 @@
         #zoom-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.98); z-index: 200; display: none; justify-content: center; align-items: center; flex-direction: column; }
         #zoom-title { color: #e0c097; font-family: 'Cinzel', serif; font-size: 24px; margin-bottom: 20px; }
 
-        /* 🔥 СТИЛИ ДЛЯ КНОПКИ ЗАМЕНЫ И МЕНЮ ВЫБОРА */
+        /* 🔥 СТИЛИ РЕДАКТИРОВАНИЯ */
         .edit-btn { margin-top: 20px; padding: 10px 20px; background: #333; color: #e0c097; border: 1px solid #e0c097; cursor: pointer; font-family: 'Cinzel', serif; font-size: 14px; letter-spacing: 1px; transition: 0.3s; border-radius: 5px; }
         .edit-btn:hover { background: #e0c097; color: #000; }
 
@@ -80,7 +66,7 @@
         .selector-item:hover { background: #e0c097; color: #000; border-color: #fff; }
         .close-selector { margin-top: 10px; padding: 15px; background: transparent; border: 1px solid #e0c097; color: #e0c097; width: 100%; font-family: 'Cinzel'; font-weight: bold; cursor: pointer; }
 
-        /* ЭКРАН ЗАГРУЗКИ */
+        /* ЗАГРУЗКА */
         #start-screen { position: absolute; top:0; left:0; width:100%; height:100%; background:#0f0f0f; z-index:999; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.8s ease; }
         .logo-text { font-family: 'Cinzel', serif; font-size: 32px; color: #e0c097; margin-bottom: 40px; text-align: center; letter-spacing: 4px; border-bottom: 1px solid #e0c097; padding-bottom: 10px; text-shadow: 0 0 15px #e0c097; }
         #big-start-btn { padding: 15px 40px; font-size: 16px; background: transparent; color: #e0c097; border: 1px solid #e0c097; text-transform: uppercase; letter-spacing: 2px; cursor: pointer; transition: all 0.3s; }
@@ -111,9 +97,7 @@
         </div>
         
         <div class="ui-layer">
-            <div class="top-panel">
-                <div class="app-title">RIDER HARDCORE</div>
-            </div>
+            <div class="top-panel"><div class="app-title">RIDER HARDCORE</div></div>
             <div id="status" class="status-text">ОЖИДАНИЕ...</div>
             <div class="bottom-panel"><button class="scan-btn" onclick="captureRead()">📷</button></div>
         </div>
@@ -144,7 +128,7 @@
     </div>
 
     <script>
-        // === 1. АВТО-ГЕНЕРАЦИЯ БАЗЫ КАРТ ===
+        // === 1. БАЗА КАРТ ===
         const BASE_IMG_URL = "https://raw.githubusercontent.com/marataitester-blip/rider-tarot-card/main/Cards-jpg/Cards-jpg/";
         const TAROT_DATA = [];
 
@@ -169,7 +153,7 @@
             });
         });
 
-        // === 2. НАСТРОЙКИ (Как в рабочем варианте) ===
+        // === 2. НАСТРОЙКИ (РАБОЧИЕ) ===
         const MODEL_PATH = 'rider_hardcore.onnx'; 
         const MODEL_SIZE = 800; 
         const CONFIDENCE = 0.25; 
@@ -177,7 +161,7 @@
 
         let session;
         let detectedCards = []; 
-        let currentZoomIndex = -1; // 🔥 Индекс текущей карты для замены
+        let currentZoomIndex = -1; // 🔥 ТЕКУЩИЙ ИНДЕКС КАРТЫ ДЛЯ ЗАМЕНЫ
         const status = document.getElementById('status');
 
         ort.env.wasm.numThreads = 2; ort.env.wasm.simd = false;
@@ -186,7 +170,10 @@
             const btn = document.getElementById('big-start-btn');
             const loadText = document.getElementById('loading-text');
             const errorLog = document.getElementById('error-log');
-            btn.style.display = 'none'; loadText.style.display = 'block'; errorLog.innerText = "";
+            
+            btn.style.display = 'none';
+            loadText.style.display = 'block';
+            errorLog.innerText = "";
 
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: {ideal: 1280}, height: {ideal: 720} }, audio: false });
@@ -194,13 +181,22 @@
                 video.srcObject = stream;
                 video.style.display = 'block'; 
                 await new Promise(r => video.onloadedmetadata = r);
+                
+                // ПРОСТАЯ ЗАГРУЗКА БЕЗ ПРОВЕРОК
                 session = await ort.InferenceSession.create(MODEL_PATH, { executionProviders: ['wasm'] });
+
                 document.getElementById('start-screen').style.opacity = '0';
                 setTimeout(() => { document.getElementById('start-screen').style.display = 'none'; }, 800);
-                status.innerText = "ПОИСК ЦЕЛИ..."; status.style.color = "#888";
+
+                status.innerText = "ПОИСК ЦЕЛИ...";
+                status.style.color = "#888";
                 detectFrame(video);
+
             } catch (e) {
-                console.error(e); loadText.style.display = 'none'; btn.style.display = 'inline-block'; btn.innerText = "ПОВТОРИТЬ";
+                console.error(e);
+                loadText.style.display = 'none';
+                btn.style.display = 'inline-block';
+                btn.innerText = "ПОВТОРИТЬ";
                 errorLog.innerText = "ОШИБКА: " + e.message;
             }
         }
@@ -219,125 +215,11 @@
 
             try {
                 const results = await session.run({ [session.inputNames[0]]: tensor });
-                const rawCards = processAndDraw(results[session.outputNames[0]].data, canvas, video.videoWidth, video.videoHeight);
+                const output = results[session.outputNames[0]].data;
+                const rawCards = processAndDraw(output, canvas, video.videoWidth, video.videoHeight);
                 
-                // 🔥 Обновляем только если окно результата ЗАКРЫТО
+                // 🔥 ОБНОВЛЯЕМ ТОЛЬКО ЕСЛИ ОКНО РЕЗУЛЬТАТА ЗАКРЫТО
                 if (document.getElementById('result-box').style.display === 'none') {
                     detectedCards = rawCards;
                     if (detectedCards.length > 0) {
-                        status.innerText = `ЗАХВАЧЕНО КАРТ: ${detectedCards.length}`;
-                        status.style.color = "#d4af37"; status.style.textShadow = "0 0 10px #d4af37";
-                    } else {
-                        status.innerText = "ПОИСК ЦЕЛИ..."; status.style.color = "#888"; status.style.textShadow = "none";
-                    }
-                }
-            } catch (e) { console.error(e); }
-            setTimeout(() => requestAnimationFrame(() => detectFrame(video)), 50);
-        }
-
-        function processAndDraw(data, canvas, vW, vH) {
-            const ctx = canvas.getContext('2d'); ctx.clearRect(0,0,vW,vH);
-            const numClasses = 78; const channels = numClasses + 4; const dynamicAnchors = data.length / channels; 
-            let boxes = [];
-            for (let i=0; i<dynamicAnchors; i++) {
-                let maxConf = 0; let classIdx = 0;
-                for(let c=4; c<channels; c++) { const val = data[c*dynamicAnchors+i]; if(val > maxConf) { maxConf = val; classIdx = c-4; } }
-                if (maxConf > CONFIDENCE) { 
-                    const x = data[0*dynamicAnchors+i]; const y = data[1*dynamicAnchors+i];
-                    const w = data[2*dynamicAnchors+i]; const h = data[3*dynamicAnchors+i];
-                    boxes.push({ x: x, y: y, w: w, h: h, score: maxConf, classId: classIdx });
-                }
-            }
-            boxes.sort((a,b) => b.score - a.score);
-            const cleanBoxes = [];
-            while(boxes.length > 0) {
-                const best = boxes.shift(); cleanBoxes.push(best);
-                boxes = boxes.filter(b => {
-                    const x1 = Math.max(best.x - best.w/2, b.x - b.w/2); const y1 = Math.max(best.y - best.h/2, b.y - b.h/2);
-                    const x2 = Math.min(best.x + best.w/2, b.x + b.w/2); const y2 = Math.min(best.y + best.h/2, b.y + b.h/2);
-                    if (x2 < x1 || y2 < y1) return true;
-                    return ((x2-x1)*(y2-y1)) / (best.w*best.h + b.w*b.h - (x2-x1)*(y2-y1)) < NMS_THRESHOLD;
-                });
-            }
-            const sx = vW/MODEL_SIZE; const sy = vH/MODEL_SIZE; const finalCards = [];
-            ctx.lineWidth = 2; ctx.font = "16px Roboto"; 
-            cleanBoxes.forEach(box => {
-                const realX = (box.x - box.w/2) * sx; const realY = (box.y - box.h/2) * sy;
-                ctx.strokeStyle = "rgba(224, 192, 151, 0.8)"; ctx.strokeRect(realX, realY, box.w * sx, box.h * sy);
-                let card = TAROT_DATA[box.classId];
-                if(card) finalCards.push({ id: box.classId, x: realX, name: card.name, image: card.image });
-            });
-            const unique = []; const seen = new Set();
-            for (const c of finalCards) { if (!seen.has(c.id)) { seen.add(c.id); unique.push(c); } }
-            return unique;
-        }
-
-        // === ВЫВОД РЕЗУЛЬТАТОВ ===
-        function captureRead() {
-            if (detectedCards.length === 0) { alert("Камера не видит карты!"); return; }
-            detectedCards.sort((a, b) => a.x - b.x); // Сортировка слева направо
-            renderResult();
-            document.getElementById('result-box').style.display = 'flex';
-        }
-
-        function renderResult() {
-            const container = document.getElementById('cards-container');
-            container.innerHTML = "";
-            detectedCards.forEach((c, index) => { // Передаем индекс для редактирования
-                const div = document.createElement('div');
-                div.className = 'card-item';
-                div.onclick = () => openZoom(index);
-                div.innerHTML = `<img src="${c.image}" class="card-visual"><div class="card-name-mini">${c.name}</div>`;
-                container.appendChild(div);
-            });
-        }
-
-        function closeResult() { document.getElementById('result-box').style.display = 'none'; }
-        
-        // === 🔥 ЛОГИКА РЕДАКТИРОВАНИЯ И ЗУМА ===
-        function openZoom(index) {
-            currentZoomIndex = index;
-            const card = detectedCards[index];
-            const modal = document.getElementById('zoom-modal');
-            document.getElementById('zoom-media-placeholder').innerHTML = `<img src="${card.image}" style="max-width: 90vw; max-height: 70vh; border: 2px solid #e0c097;">`;
-            document.getElementById('zoom-title').innerText = card.name;
-            modal.style.display = 'flex';
-        }
-        function closeZoom() { document.getElementById('zoom-modal').style.display = 'none'; }
-
-        // Открытие списка всех карт
-        function openCardSelector() {
-            const grid = document.getElementById('selector-grid');
-            grid.innerHTML = "";
-            TAROT_DATA.forEach((card, dbIndex) => {
-                const div = document.createElement('div');
-                div.className = 'selector-item';
-                div.innerText = card.name;
-                div.onclick = () => selectNewCard(dbIndex);
-                grid.appendChild(div);
-            });
-            document.getElementById('card-selector').style.display = 'flex';
-        }
-
-        // Выбор правильной карты
-        function selectNewCard(dbIndex) {
-            const newCard = TAROT_DATA[dbIndex];
-            const oldCard = detectedCards[currentZoomIndex];
-            
-            // Заменяем карту в массиве, но сохраняем её позицию (x,y)
-            detectedCards[currentZoomIndex] = {
-                id: dbIndex,
-                x: oldCard.x,
-                name: newCard.name,
-                image: newCard.image
-            };
-            
-            closeCardSelector();
-            closeZoom();
-            renderResult(); // Перерисовываем список с новой картой
-        }
-
-        function closeCardSelector() { document.getElementById('card-selector').style.display = 'none'; }
-    </script>
-</body>
-</html>
+                        status.innerText = `ЗАХВАЧЕНО КАРТ
