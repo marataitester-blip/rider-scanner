@@ -3,228 +3,165 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>RIDER GOLD 800</title>
+    <title>RIDER: SMART TILING</title>
     
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
     
     <style>
-        /* === 1. ОСНОВА === */
         body { margin: 0; background: #000; overflow: hidden; font-family: 'Roboto', sans-serif; }
         #app { position: relative; width: 100vw; height: 100vh; }
         
         video { width: 100%; height: 100%; object-fit: cover; }
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
 
-        /* === 2. ИНТЕРФЕЙС === */
-        #ui-layer { 
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 20; 
-            display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; 
-        }
+        /* ИНТЕРФЕЙС */
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 20; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; }
         
         .header { 
-            background: rgba(0,0,0,0.6); padding: 15px; text-align: center; color: #ffd700; 
-            font-size: 18px; font-weight: bold; letter-spacing: 2px; pointer-events: auto;
-            border-bottom: 1px solid #ffd700; text-shadow: 0 2px 4px #000;
+            background: rgba(0,0,0,0.6); padding: 15px; text-align: center; color: #00ffff; 
+            font-size: 16px; font-weight: bold; letter-spacing: 2px; pointer-events: auto;
+            border-bottom: 1px solid #00ffff; text-shadow: 0 0 5px #00ffff;
         }
         
         .footer { 
             padding: 40px; display: flex; justify-content: center; align-items: center; 
-            background: linear-gradient(to top, rgba(0,0,0,0.95), transparent); pointer-events: auto;
+            background: linear-gradient(to top, rgba(0,0,0,0.9), transparent); pointer-events: auto;
         }
         
-        /* КНОПКА СЪЕМКИ */
+        /* КНОПКА "УМНЫЙ СКАН" */
         #shutter-btn {
-            width: 80px; height: 80px; border-radius: 50%; border: 4px solid #ffd700;
-            background: rgba(255, 215, 0, 0.3); cursor: pointer; position: relative;
-            box-shadow: 0 0 30px rgba(255, 215, 0, 0.5); transition: transform 0.1s;
+            width: 90px; height: 90px; border-radius: 50%; border: 4px solid #00ffff;
+            background: rgba(0, 255, 255, 0.2); cursor: pointer; position: relative;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.4); transition: 0.2s;
+            display: flex; align-items: center; justify-content: center;
         }
-        #shutter-btn:active { transform: scale(0.9); background: #ffd700; }
+        #shutter-btn::after { content: "SCAN"; color: #00ffff; font-weight: bold; font-size: 14px; }
+        #shutter-btn:active { transform: scale(0.95); background: #00ffff; color: #000; }
 
-        /* СТАТУС */
-        #status-pill {
-            position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.8); border: 1px solid #ffd700; color: #fff;
-            padding: 8px 16px; border-radius: 20px; font-size: 14px; text-transform: uppercase;
+        /* ИНДИКАТОР ПРОЦЕССА */
+        #processing-badge {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8); border: 2px solid #00ffff; color: #fff;
+            padding: 20px 40px; border-radius: 10px; font-size: 18px; display: none; z-index: 100;
+            text-align: center;
         }
 
-        /* === 3. ЭКРАН РЕЗУЛЬТАТА === */
+        /* ЭКРАН РЕЗУЛЬТАТА */
         #result-screen {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: #0b0b0b; z-index: 50; display: none; flex-direction: column;
+            background: #111; z-index: 50; display: none; flex-direction: column;
         }
-        
-        /* Стол с картами */
         #visual-layout {
-            flex: 2; 
-            background: #111; 
-            position: relative; 
-            margin: 10px; border: 1px dashed #ffd700; border-radius: 10px;
-            overflow: hidden; 
+            flex: 2; background: #0e0e0e; position: relative; margin: 10px; 
+            border: 1px dashed #00ffff; border-radius: 10px; overflow: hidden; 
         }
-        
         .layout-card {
-            position: absolute; border: 2px solid #ffd700; border-radius: 6px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.9); transition: all 0.3s;
+            position: absolute; border: 2px solid #00ffff; border-radius: 4px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.8);
         }
-        .layout-card img { width: 100%; height: 100%; object-fit: cover; border-radius: 4px; }
-        
+        .layout-card img { width: 100%; height: 100%; object-fit: cover; }
         .layout-card-label {
             position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%);
-            color: #ffd700; font-size: 10px; white-space: nowrap; text-shadow: 0 1px 3px #000;
-            background: rgba(0,0,0,0.9); padding: 2px 6px; border-radius: 4px; border: 1px solid #333;
+            color: #00ffff; font-size: 10px; white-space: nowrap; background: #000; padding: 2px 5px;
         }
 
-        /* Панель управления */
         #result-controls {
-            flex: 1; border-top: 2px solid #ffd700; background: #1a1a1a;
-            padding: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+            flex: 1; border-top: 2px solid #00ffff; background: #1a1a1a;
+            padding: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 15px;
         }
-        
-        .result-title { color: #ffd700; font-size: 20px; font-weight: bold; letter-spacing: 1px; }
-        .result-subtitle { color: #888; font-size: 13px; text-align: center; }
-
         #retry-btn {
-            width: 80%; padding: 15px; 
-            background: transparent; color: #ffd700; font-weight: bold; font-size: 16px;
-            border: 2px solid #ffd700; border-radius: 10px; cursor: pointer; text-transform: uppercase;
-            box-shadow: 0 0 15px rgba(255, 215, 0, 0.2);
+            padding: 15px 40px; background: transparent; color: #00ffff; 
+            border: 2px solid #00ffff; border-radius: 30px; cursor: pointer; font-weight: bold;
         }
-        #retry-btn:active { background: #ffd700; color: #000; }
 
-        /* === 4. ЗАГРУЗЧИК === */
+        /* ЗАГРУЗКА */
         #loader {
             position: absolute; top:0; left:0; width:100%; height:100%; background:#000; z-index:100;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
         }
-        .spinner { width:40px; height:40px; border:4px solid #333; border-top:4px solid #ffd700; border-radius:50%; animation: spin 1s infinite; }
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-        #start-btn { display:none; margin-top:20px; padding:10px 30px; background:transparent; border:1px solid #ffd700; color:#ffd700; cursor: pointer; }
-        #err-log { color: red; font-size: 12px; margin-top: 20px; max-width: 80%; text-align: center; }
     </style>
 </head>
 <body>
 
 <div id="app">
     <div id="loader">
-        <h1 style="color: #ffd700; font-weight: normal; letter-spacing: 3px;">RIDER GOLD</h1>
-        <div class="spinner"></div>
-        <p id="load-text" style="color: #666; font-size: 12px; margin-top: 15px;">Загрузка нейросети (800px / 78 карт)...</p>
-        <div id="err-log"></div>
-        <button id="start-btn" onclick="init()">ЗАПУСТИТЬ</button>
+        <h2 style="color:#00ffff;">RIDER TILING</h2>
+        <div style="color:#666;">Загрузка нейросети (800px)...</div>
+        <button id="start-btn" onclick="init()" style="margin-top:20px; display:none;">START</button>
     </div>
 
     <video id="video" playsinline muted autoplay></video>
     <canvas id="canvas"></canvas>
 
+    <div id="processing-badge">
+        <div id="proc-text">Сканирование секторов...</div>
+    </div>
+
     <div id="ui-layer">
-        <div class="header">СКАНЕР RIDER</div>
-        <div id="status-pill">Наведите на карты</div>
+        <div class="header">SMART SCAN (TILING)</div>
         <div class="footer">
-            <div id="shutter-btn" onclick="capture()"></div>
+            <div id="shutter-btn" onclick="smartCapture()"></div>
         </div>
     </div>
 
     <div id="result-screen">
-        <div id="visual-layout">
-            <div style="position: absolute; top:50%; left:50%; transform:translate(-50%,-50%); color:#444;">Нет карт</div>
-        </div>
-
+        <div id="visual-layout"><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#555">Пусто</div></div>
         <div id="result-controls">
-            <div>
-                <div class="result-title" style="text-align:center;">РАСКЛАД ПРИНЯТ</div>
-                <div class="result-subtitle">Геометрия сохранена</div>
-            </div>
-            <button id="retry-btn" onclick="retry()">↺ СКАНИРОВАТЬ СНОВА</button>
+            <div style="color:#00ffff; font-size:18px;">ГОТОВО</div>
+            <button id="retry-btn" onclick="retry()">ЕЩЕ РАЗ</button>
         </div>
     </div>
 </div>
 
 <script>
-    // === 1. БАЗА КАРТ RIDER WAITE (78 КАРТ) ===
+    // === 1. БАЗА КАРТ (RIDER) ===
     const BASE_URL = "https://raw.githubusercontent.com/marataitester-blip/rider-tarot-card/main/Cards-jpg/Cards-jpg/";
     const CARDS_DB = [];
-
-    // Порядок строго как в тренировке (Majors -> Wands -> Cups -> Swords -> Pentacles)
+    const MAJORS_RU = ["Шут","Маг","Жрица","Императрица","Император","Жрец","Влюбленные","Колесница","Сила","Отшельник","Колесо","Справедливость","Повешенный","Смерть","Умеренность","Дьявол","Башня","Звезда","Луна","Солнце","Суд","Мир"];
+    const MAJORS_FILES = ["00-TheFool.jpg","01-TheMagician.jpg","02-TheHighPriestess.jpg","03-TheEmpress.jpg","04-TheEmperor.jpg","05-TheHierophant.jpg","06-TheLovers.jpg","07-TheChariot.jpg","08-Strength.jpg","09-TheHermit.jpg","10-WheelOfFortune.jpg","11-Justice.jpg","12-TheHangedMan.jpg","13-Death.jpg","14-Temperance.jpg","15-TheDevil.jpg","16-TheTower.jpg","17-TheStar.jpg","18-TheMoon.jpg","19-TheSun.jpg","20-Judgement.jpg","21-TheWorld.jpg"];
     
-    // 1. Старшие (00-21)
-    const MAJORS_FILES = [
-        "00-TheFool.jpg", "01-TheMagician.jpg", "02-TheHighPriestess.jpg", "03-TheEmpress.jpg",
-        "04-TheEmperor.jpg", "05-TheHierophant.jpg", "06-TheLovers.jpg", "07-TheChariot.jpg",
-        "08-Strength.jpg", "09-TheHermit.jpg", "10-WheelOfFortune.jpg", "11-Justice.jpg",
-        "12-TheHangedMan.jpg", "13-Death.jpg", "14-Temperance.jpg", "15-TheDevil.jpg",
-        "16-TheTower.jpg", "17-TheStar.jpg", "18-TheMoon.jpg", "19-TheSun.jpg",
-        "20-Judgement.jpg", "21-TheWorld.jpg"
-    ];
-    const MAJORS_RU = [
-        "Шут", "Маг", "Жрица", "Императрица", "Император", "Жрец", "Влюбленные", "Колесница",
-        "Сила", "Отшельник", "Колесо Фортуны", "Справедливость", "Повешенный", "Смерть", "Умеренность",
-        "Дьявол", "Башня", "Звезда", "Луна", "Солнце", "Суд", "Мир"
-    ];
-
-    MAJORS_FILES.forEach((f, i) => {
-        CARDS_DB.push({ name: MAJORS_RU[i], img: BASE_URL + f });
-    });
-
-    // 2. Младшие (Wands, Cups, Swords, Pentacles)
-    const SUITS = [
-        {id: "Wands", ru: "Жезлов"}, {id: "Cups", ru: "Кубков"},
-        {id: "Swords", ru: "Мечей"}, {id: "Pentacles", ru: "Пентаклей"}
-    ];
-    const RANKS_RU = ["Туз", "2", "3", "4", "5", "6", "7", "8", "9", "10", "Паж", "Рыцарь", "Королева", "Король"];
+    MAJORS_FILES.forEach((f,i) => CARDS_DB.push({name: MAJORS_RU[i], img: BASE_URL+f}));
     
-    SUITS.forEach(suit => {
-        // В тренировке цикл был range(1, 15), файлы типа Wands01.jpg
-        for (let i = 1; i <= 14; i++) {
-            let numStr = i.toString().padStart(2, '0');
-            let filename = `${suit.id}${numStr}.jpg`;
-            let rankName = RANKS_RU[i-1];
-            CARDS_DB.push({ name: `${rankName} ${suit.ru}`, img: BASE_URL + filename });
-        }
-    });
+    const SUITS = [{id:"Wands",ru:"Жезлов"},{id:"Cups",ru:"Кубков"},{id:"Swords",ru:"Мечей"},{id:"Pentacles",ru:"Пентаклей"}];
+    const RANKS = ["Туз","2","3","4","5","6","7","8","9","10","Паж","Рыцарь","Королева","Король"];
+    SUITS.forEach(s => { for(let i=1; i<=14; i++){ CARDS_DB.push({name: RANKS[i-1]+" "+s.ru, img: BASE_URL+s.id+i.toString().padStart(2,'0')+".jpg"}); }});
 
-    // === 2. НАСТРОЙКИ (ПОД RIDER GOLD 800) ===
+    // === 2. НАСТРОЙКИ ===
     const CONFIG = {
         modelPath: './rider_gold_800.onnx', // Твой файл
-        modelSize: 800, // Разрешение тренировки
-        conf: 0.35,     
-        nms: 0.45       
+        modelSize: 800, // Размер входа модели
+        conf: 0.35,     // Порог уверенности
+        nms: 0.45       // Порог склейки (IoU)
     };
 
     let session = null;
     let isPaused = false;
-    let lastBoxes = [];
-
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
-    const statusPill = document.getElementById('status-pill');
 
-    // === 3. ИНИЦИАЛИЗАЦИЯ ===
+    // === 3. ЗАПУСК ===
     async function init() {
         document.getElementById('start-btn').style.display = 'none';
-        const loadTxt = document.getElementById('load-text');
-        
         try {
-            loadTxt.innerText = "Камера...";
+            // Просим максимальное разрешение (4K/FullHD)
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'environment', width: { ideal: 1920 } },
+                video: { facingMode: 'environment', width: { ideal: 3840 }, height: { ideal: 2160 } },
                 audio: false
             });
             video.srcObject = stream;
             video.play();
             await new Promise(r => video.onloadedmetadata = r);
 
-            loadTxt.innerText = "Загрузка rider_gold_800.onnx...";
+            // Грузим модель
             session = await ort.InferenceSession.create(CONFIG.modelPath, { executionProviders: ['wasm'] });
-
+            
             document.getElementById('loader').style.display = 'none';
             resizeCanvas();
-            loop();
-
+            loop(); // Запуск Live View (быстрый режим)
         } catch (e) {
-            console.error(e);
-            document.getElementById('err-log').innerText = e.message + "\nУбедись, что файл rider_gold_800.onnx загружен.";
+            alert("Ошибка: " + e.message);
             document.getElementById('start-btn').style.display = 'block';
         }
     }
@@ -235,133 +172,195 @@
         canvas.height = video.videoHeight;
     }
 
-    // === 4. ЦИКЛ РАСПОЗНАВАНИЯ ===
+    // === 4. LIVE VIEW (Быстрый, без тайлинга) ===
     async function loop() {
         if (isPaused) return;
 
-        const mat = document.createElement('canvas');
-        mat.width = CONFIG.modelSize; mat.height = CONFIG.modelSize;
-        mat.getContext('2d').drawImage(video, 0, 0, CONFIG.modelSize, CONFIG.modelSize);
-        const data = mat.getContext('2d').getImageData(0,0,CONFIG.modelSize,CONFIG.modelSize).data;
+        // Просто сжимаем кадр до 800x800 для прицела
+        const boxes = await runInference(video, 0, 0, video.videoWidth, video.videoHeight);
         
-        const input = new Float32Array(3 * CONFIG.modelSize * CONFIG.modelSize);
-        for (let i=0; i<CONFIG.modelSize*CONFIG.modelSize; i++) {
-            input[i] = data[i*4]/255.0;
-            input[CONFIG.modelSize*CONFIG.modelSize+i] = data[i*4+1]/255.0;
-            input[2*CONFIG.modelSize*CONFIG.modelSize+i] = data[i*4+2]/255.0;
-        }
-        
-        const tensor = new ort.Tensor('float32', input, [1, 3, CONFIG.modelSize, CONFIG.modelSize]);
-        
-        try {
-            const res = await session.run({ [session.inputNames[0]]: tensor });
-            drawBoxes(res[session.outputNames[0]].data);
-        } catch(e) { console.error(e); }
+        // Рисуем рамки
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        ctx.strokeStyle = "#00ffff"; ctx.lineWidth = 3;
+        boxes.forEach(b => {
+            // Координаты уже нормализованы (0..1), умножаем на размер экрана
+            ctx.strokeRect((b.cx - b.w/2)*canvas.width, (b.cy - b.h/2)*canvas.height, b.w*canvas.width, b.h*canvas.height);
+        });
 
         requestAnimationFrame(loop);
     }
 
-    // === 5. ОТРИСОВКА ===
-    function drawBoxes(data) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // === 5. ФУНКЦИЯ ДЕТЕКЦИИ (ОДИН ПРОГОН) ===
+    // Принимает источник (видео или кусок канваса) и его реальные размеры
+    async function runInference(source, srcX, srcY, srcW, srcH) {
+        // 1. Рисуем кусок (src) в буфер 800x800
+        const mat = document.createElement('canvas');
+        mat.width = CONFIG.modelSize; mat.height = CONFIG.modelSize;
+        const matCtx = mat.getContext('2d');
         
-        const numClasses = 78; 
-        const channels = numClasses + 4;
-        const anchors = data.length / channels;
+        // drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh)
+        matCtx.drawImage(video, srcX, srcY, srcW, srcH, 0, 0, CONFIG.modelSize, CONFIG.modelSize);
+        
+        const data = matCtx.getImageData(0,0,CONFIG.modelSize,CONFIG.modelSize).data;
+        const input = new Float32Array(3 * CONFIG.modelSize * CONFIG.modelSize);
+        for(let i=0; i<CONFIG.modelSize**2; i++){
+            input[i] = data[i*4]/255.0;
+            input[CONFIG.modelSize**2+i] = data[i*4+1]/255.0;
+            input[2*CONFIG.modelSize**2+i] = data[i*4+2]/255.0;
+        }
+
+        const tensor = new ort.Tensor('float32', input, [1, 3, CONFIG.modelSize, CONFIG.modelSize]);
+        const res = await session.run({ [session.inputNames[0]]: tensor });
+        const output = res[session.outputNames[0]].data;
+
+        // Парсинг YOLO
+        const numClasses = 78; const channels = numClasses+4; const anchors = output.length/channels;
         let boxes = [];
-
-        for(let i=0; i<anchors; i++) {
-            let max = 0, cls = 0;
-            for(let c=4; c<channels; c++) {
-                let val = data[c*anchors+i];
-                if(val > max) { max = val; cls = c-4; }
-            }
-            if(max > CONFIG.conf) {
-                const x = data[0*anchors+i]; const y = data[1*anchors+i];
-                const w = data[2*anchors+i]; const h = data[3*anchors+i];
-                boxes.push({x, y, w, h, score: max, cls});
+        for(let i=0; i<anchors; i++){
+            let max=0, cls=0;
+            for(let c=4; c<channels; c++){ let v=output[c*anchors+i]; if(v>max){max=v; cls=c-4;} }
+            if(max > CONFIG.conf){
+                // Координаты в пикселях модели 800x800
+                const mx = output[0*anchors+i], my = output[1*anchors+i];
+                const mw = output[2*anchors+i], mh = output[3*anchors+i];
+                
+                // Переводим в ОТНОСИТЕЛЬНЫЕ координаты (0..1) для текущего тайла
+                boxes.push({ 
+                    cx: mx/CONFIG.modelSize, cy: my/CONFIG.modelSize, 
+                    w: mw/CONFIG.modelSize, h: mh/CONFIG.modelSize, 
+                    score: max, cls: cls 
+                });
             }
         }
-
-        boxes.sort((a,b) => b.score - a.score);
-        let active = [];
-        while(boxes.length) {
-            let best = boxes.shift(); active.push(best);
-            boxes = boxes.filter(b => {
-                let x1 = Math.max(best.x-best.w/2, b.x-b.w/2), y1 = Math.max(best.y-best.h/2, b.y-b.h/2);
-                let x2 = Math.min(best.x+best.w/2, b.x+b.w/2), y2 = Math.min(best.y+best.h/2, b.y+b.h/2);
-                if(x2<x1 || y2<y1) return true;
-                let inter = (x2-x1)*(y2-y1);
-                let union = (best.w*best.h) + (b.w*b.h) - inter;
-                return (inter/union) < CONFIG.nms;
-            });
-        }
-
-        lastBoxes = active;
-        statusPill.innerText = `Найдено карт: ${active.length}`;
-
-        const sx = canvas.width / CONFIG.modelSize;
-        const sy = canvas.height / CONFIG.modelSize;
-        
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = "#00ff00"; // Зеленый прицел
-        
-        active.forEach(b => {
-            ctx.strokeRect((b.x - b.w/2)*sx, (b.y - b.h/2)*sy, b.w*sx, b.h*sy);
-        });
+        return boxes;
     }
 
-    // === 6. СНИМОК И ГЕОМЕТРИЯ ===
-    function capture() {
-        if(lastBoxes.length === 0) { alert("Не вижу карт!"); return; }
-        
+    // === 6. SMART CAPTURE (TILING LOGIC) ===
+    async function smartCapture() {
         isPaused = true;
         video.pause();
         document.getElementById('ui-layer').style.display = 'none';
-        document.getElementById('result-screen').style.display = 'flex';
+        const badge = document.getElementById('processing-badge');
+        badge.style.display = 'block';
 
-        renderVisual(lastBoxes);
+        const fullW = video.videoWidth;
+        const fullH = video.videoHeight;
+        
+        // РАЗБИВКА НА ТАЙЛЫ (Нарезка)
+        // Размер тайла = 1024 (чуть больше модели, чтобы был контекст)
+        // Или возьмем просто 2x2 или 3x2 сетку в зависимости от пропорций
+        let tiles = [];
+        
+        // Стратегия: Делим экран на перекрывающиеся куски
+        // Например, шаг 50%, размер окна 60-70% от экрана
+        // Для простоты: 
+        // 1. Полный кадр (Глобальный контекст)
+        // 2. 4 Сектора (Лево-Верх, Право-Верх, Лево-Низ, Право-Низ) с перекрытием
+        
+        // Глобальный прогон (чтобы найти крупные карты)
+        tiles.push({x:0, y:0, w:fullW, h:fullH, type:'global'});
+
+        // Детальные прогоны (4 угла)
+        const halfW = fullW * 0.6; // Берем 60% ширины (перекрытие 20% в центре)
+        const halfH = fullH * 0.6; 
+        
+        tiles.push({x:0, y:0, w:halfW, h:halfH}); // LT
+        tiles.push({x:fullW-halfW, y:0, w:halfW, h:halfH}); // RT
+        tiles.push({x:0, y:fullH-halfH, w:halfW, h:halfH}); // LB
+        tiles.push({x:fullW-halfW, y:fullH-halfH, w:halfW, h:halfH}); // RB
+
+        let allBoxes = [];
+        
+        // ЗАПУСК ИНФЕРЕНСА ПО КУСКАМ
+        for (let i=0; i<tiles.length; i++) {
+            document.getElementById('proc-text').innerText = `Сектор ${i+1} из ${tiles.length}...`;
+            // Ждем тик, чтобы обновился UI
+            await new Promise(r => requestAnimationFrame(r));
+            
+            const t = tiles[i];
+            const tileBoxes = await runInference(video, t.x, t.y, t.w, t.h);
+            
+            // ПЕРЕСЧЕТ КООРДИНАТ В ГЛОБАЛЬНЫЕ
+            tileBoxes.forEach(b => {
+                // b.cx (0..1) -> пиксели тайла -> пиксели глобальные
+                const absX = t.x + b.cx * t.w;
+                const absY = t.y + b.cy * t.h;
+                const absW = b.w * t.w;
+                const absH = b.h * t.h;
+                
+                allBoxes.push({
+                    x: absX, y: absY, w: absW, h: absH,
+                    score: b.score, cls: b.cls
+                });
+            });
+        }
+
+        document.getElementById('proc-text').innerText = "Склейка результатов...";
+        
+        // === 7. ГЛОБАЛЬНЫЙ NMS (Удаление дублей) ===
+        // Если одну карту нашли и в глобальном, и в детальном тайле - оставляем ту, где уверенность выше
+        allBoxes.sort((a,b) => b.score - a.score);
+        const finalBoxes = [];
+        
+        while(allBoxes.length > 0) {
+            const best = allBoxes.shift();
+            finalBoxes.push(best);
+            
+            // Удаляем всех, кто сильно пересекается с best
+            allBoxes = allBoxes.filter(b => {
+                const x1 = Math.max(best.x - best.w/2, b.x - b.w/2);
+                const y1 = Math.max(best.y - best.h/2, b.y - b.h/2);
+                const x2 = Math.min(best.x + best.w/2, b.x + b.w/2);
+                const y2 = Math.min(best.y + best.h/2, b.y + b.h/2);
+                
+                if (x2 < x1 || y2 < y1) return true; // Нет пересечения
+                
+                const inter = (x2 - x1) * (y2 - y1);
+                const union = (best.w * best.h) + (b.w * b.h) - inter;
+                return (inter / union) < 0.50; // Порог IoU (если > 50% общее, то удаляем)
+            });
+        }
+
+        badge.style.display = 'none';
+        showResults(finalBoxes, fullW, fullH);
     }
 
-    function renderVisual(boxes) {
+    function showResults(boxes, imgW, imgH) {
+        document.getElementById('result-screen').style.display = 'flex';
         const container = document.getElementById('visual-layout');
         container.innerHTML = "";
-
-        // Границы расклада
+        
+        // Находим границы всего расклада
         let minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
         boxes.forEach(b => {
             minX = Math.min(minX, b.x); maxX = Math.max(maxX, b.x);
             minY = Math.min(minY, b.y); maxY = Math.max(maxY, b.y);
         });
-        
-        // Размеры стола с отступами
-        let W = (maxX - minX) * 1.5 || 100;
-        let H = (maxY - minY) * 1.5 || 100;
-        let cX = (minX + maxX) / 2;
-        let cY = (minY + maxY) / 2;
+
+        // Нормализуем для отображения
+        const W = (maxX - minX) * 1.5 || imgW;
+        const H = (maxY - minY) * 1.5 || imgH;
+        const cX = (minX + maxX) / 2;
+        const cY = (minY + maxY) / 2;
 
         boxes.forEach(b => {
-            let card = CARDS_DB[b.cls];
+            const card = CARDS_DB[b.cls];
             if(!card) return;
 
-            let el = document.createElement('div');
+            const el = document.createElement('div');
             el.className = 'layout-card';
             
-            // Позиция в %
-            let left = 50 + ((b.x - cX) / W) * 80;
-            let top = 50 + ((b.y - cY) / H) * 80;
-            let width = (b.w / W) * 70;
-            
+            const left = 50 + ((b.x - cX) / W) * 80;
+            const top = 50 + ((b.y - cY) / H) * 80;
+            const width = (b.w / W) * 70;
+
             el.style.left = left + "%";
             el.style.top = top + "%";
             el.style.width = width + "%";
-            el.style.height = (width * 1.7) + "%"; // Пропорция карты
+            el.style.height = (width * 1.7) + "%";
             el.style.transform = "translate(-50%, -50%)";
 
-            el.innerHTML = `
-                <img src="${card.img}">
-                <div class="layout-card-label">${card.name}</div>
-            `;
+            el.innerHTML = `<img src="${card.img}"><div class="layout-card-label">${card.name}</div>`;
             container.appendChild(el);
         });
     }
