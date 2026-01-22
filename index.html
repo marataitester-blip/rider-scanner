@@ -3,173 +3,99 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>RIDER 800 TILING</title>
+    <title>RIDER 800 FIX</title>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
     <style>
-        /* === БАЗА === */
-        body { margin: 0; background: #000; font-family: 'Courier New', monospace; overflow: hidden; user-select: none; }
+        body { margin: 0; background: #000; font-family: 'Segoe UI', monospace; overflow: hidden; user-select: none; }
         #app { position: relative; width: 100vw; height: 100vh; display: flex; flex-direction: column; }
-
-        /* === КАМЕРА === */
-        #cam-container { position: relative; flex: 1; background: #000; overflow: hidden; }
         video { width: 100%; height: 100%; object-fit: cover; }
-        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
-
-        /* === UI === */
-        #ui-layer { 
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            z-index: 20; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; 
-        }
-
-        /* ПРИЦЕЛ И СЧЕТЧИК */
-        .hud-top {
-            padding: 20px; text-align: center; 
-            background: linear-gradient(180deg, rgba(0,0,0,0.9) 0%, transparent 100%);
-        }
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
         
-        #target-counter {
-            font-size: 48px; font-weight: bold; color: #0f0; 
-            text-shadow: 0 0 15px rgba(0, 255, 0, 0.6);
-            display: inline-block; padding: 5px 20px; border: 3px solid #0f0; border-radius: 12px;
-            background: rgba(0, 20, 0, 0.7);
-            transition: color 0.2s, border-color 0.2s;
-        }
-        .counter-label { color: #ffd700; font-size: 14px; margin-top: 5px; font-weight: bold; letter-spacing: 1px; }
-
-        .hud-bot {
-            padding: 40px; display: flex; justify-content: center; pointer-events: auto;
-            background: linear-gradient(0deg, rgba(0,0,0,0.9) 0%, transparent 100%);
-        }
-
+        #ui-layer { position: absolute; top:0; left:0; width:100%; height:100%; z-index:20; display:flex; flex-direction:column; justify-content:space-between; pointer-events:none; }
+        
+        .hud-top { padding: 20px; text-align: center; background: linear-gradient(180deg, rgba(0,0,0,0.8), transparent); }
+        .counter-box { font-size: 40px; color: #0f0; font-weight: bold; text-shadow: 0 0 10px #0f0; }
+        
+        .hud-bot { padding: 40px; display: flex; justify-content: center; background: linear-gradient(0deg, rgba(0,0,0,0.8), transparent); pointer-events: auto; }
+        
         #scan-btn {
-            width: 90px; height: 90px; border-radius: 50%;
-            background: rgba(212, 175, 55, 0.1); border: 4px solid #ffd700;
-            position: relative; cursor: pointer; transition: 0.2s;
-            display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 0 25px rgba(212, 175, 55, 0.3);
+            width: 80px; height: 80px; border-radius: 50%; border: 4px solid #fff;
+            background: rgba(255,255,255,0.2); cursor: pointer; display: flex; align-items: center; justify-content: center;
         }
-        #scan-btn::after {
-            content: ''; width: 70px; height: 70px; background: #ffd700; border-radius: 50%; transition: 0.2s;
-        }
-        #scan-btn:active::after { transform: scale(0.9); background: #fff; }
-
-        /* === РЕЗУЛЬТАТЫ === */
-        #result-screen {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: #111; z-index: 50; display: none; flex-direction: column;
-        }
+        #scan-btn::after { content: ''; width: 60px; height: 60px; background: #fff; border-radius: 50%; }
         
-        #table-surface {
-            flex: 1; margin: 20px; border-radius: 8px;
-            background: radial-gradient(circle at center, #2a2a2a 0%, #000 100%);
-            border: 2px solid #444; position: relative; overflow: hidden;
-        }
-
+        /* RESULT SCREEN */
+        #result-screen { position: absolute; top:0; left:0; width:100%; height:100%; background:#111; z-index:50; display:none; flex-direction:column; }
+        #table-surface { flex: 1; margin: 20px; border: 1px solid #444; position: relative; background: #222; border-radius: 8px; overflow: hidden; }
+        
         .phantom-card {
-            position: absolute; 
-            aspect-ratio: 3/5;
-            background-color: #000; background-size: cover; background-position: center;
-            border: 1px solid #ffd700; 
-            box-shadow: 0 5px 20px rgba(0,0,0,0.9);
-            transform-origin: center center;
-            transition: opacity 0.5s ease-out; opacity: 0;
-            display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+            position: absolute; border: 2px solid #ffd700; background-size: cover; 
+            transform: translate(-50%, -50%); transition: 0.3s;
         }
-        .phantom-card.vis { opacity: 1; }
-
-        .card-badge {
-            position: absolute; top: -8px; left: -8px; width: 22px; height: 22px;
-            background: #ffd700; color: #000; border-radius: 50%; border: 1px solid #fff;
-            display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold;
-        }
-        .card-label {
-            background: rgba(0,0,0,0.9); color: #ffd700; width: 100%; text-align: center;
-            font-size: 10px; padding: 3px 0; border-top: 1px solid #ffd700;
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-        }
-        
-        #controls { padding: 20px; display: flex; justify-content: center; background: #000; }
-        .btn-retry {
-            padding: 15px 50px; border: 1px solid #ffd700; background: transparent; color: #ffd700;
-            font-size: 16px; font-weight: bold; cursor: pointer; text-transform: uppercase; letter-spacing: 1px;
+        .card-badge { 
+            position: absolute; top: -10px; left: -10px; width: 24px; height: 24px; 
+            background: #ffd700; color: #000; border-radius: 50%; font-weight: bold; 
+            display: flex; align-items: center; justify-content: center; font-size: 12px;
         }
 
-        /* === ЛОАДЕР === */
-        #loader {
-            position: absolute; top:0; left:0; width:100%; height:100%; background:#000;
-            z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center;
-        }
-        .loading-bar { width: 200px; height: 4px; background: #333; margin-top: 20px; }
-        .loading-prog { width: 0%; height: 100%; background: #ffd700; transition: width 0.2s; }
-        #status-txt { margin-top: 15px; color: #888; font-size: 12px; font-family: sans-serif; letter-spacing: 1px; }
-        #err-txt { color: red; margin-top: 10px; font-size: 11px; max-width: 80%; text-align: center; }
+        #controls { padding: 20px; display: flex; justify-content: center; }
+        .btn-retry { padding: 15px 40px; background: transparent; border: 1px solid #fff; color: #fff; font-size: 16px; cursor: pointer; }
+
+        /* LOADER */
+        #loader { position: absolute; top:0; left:0; width:100%; height:100%; background:#000; z-index:100; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+        #status-txt { color: #0f0; margin-top: 10px; font-family: monospace; }
+        #err-txt { color: red; margin-top: 10px; font-size: 12px; text-align: center; max-width: 80%; }
     </style>
 </head>
 <body>
 
 <div id="app">
     <div id="loader">
-        <h2 style="color:#ffd700; letter-spacing:2px;">RIDER 800 (EXP #1)</h2>
-        <div class="loading-bar"><div class="loading-prog" id="p-fill"></div></div>
-        <div id="status-txt">INIT SYSTEM...</div>
+        <h2 style="color:#fff;">RIDER 800 FIX</h2>
+        <div id="status-txt">LOADING...</div>
         <div id="err-txt"></div>
     </div>
 
-    <div id="cam-container">
+    <div id="cam-container" style="flex:1; position:relative; overflow:hidden;">
         <video id="video" playsinline muted autoplay></video>
         <canvas id="canvas"></canvas>
     </div>
 
     <div id="ui-layer">
         <div class="hud-top">
-            <div id="target-counter">0</div>
-            <div class="counter-label">MODEL: 800PX / 4-TILES</div>
+            <div class="counter-box" id="counter">0</div>
+            <div style="color:#fff; font-size:12px;">КАРТ (800PX)</div>
         </div>
         <div class="hud-bot">
-            <div id="scan-btn" onclick="runHDScan()"></div>
+            <div id="scan-btn" onclick="runScan()"></div>
         </div>
     </div>
 
     <div id="result-screen">
-        <div style="padding:15px; text-align:center; color:#888; font-size:12px; letter-spacing: 2px;">SCANNED GEOMETRY</div>
+        <div style="padding:15px; text-align:center; color:#888;">SCANNED</div>
         <div id="table-surface"></div>
-        <div id="controls">
-            <button class="btn-retry" onclick="reset()">RESCAN</button>
-        </div>
+        <div id="controls"><button class="btn-retry" onclick="reset()">RESET</button></div>
     </div>
 </div>
 
 <script>
-    // === 1. КОНФИГ ===
     ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/";
     
     const CONFIG = {
-        model: './rider_gold_800.onnx', // !!! ВНИМАНИЕ: СТАРЫЙ ФАЙЛ !!!
-        size: 800,                      // !!! РАЗРЕШЕНИЕ 800 !!!
-        conf: 0.40,                     // Высокий порог, т.к. модель точная
+        model: './rider_gold_800.onnx', // ИСПОЛЬЗУЕМ 800PX МОДЕЛЬ
+        size: 800,
+        conf: 0.50, // Строгий порог
         iou: 0.45 
     };
 
-    // === 2. ДАННЫЕ ===
+    // БАЗА КАРТ (ПОЛНАЯ)
     const BASE = "https://raw.githubusercontent.com/marataitester-blip/rider-tarot-card/main/Cards-jpg/Cards-jpg/";
-    const DB_FULL = [];
-    const MAJORS = ["Шут","Маг","Жрица","Императрица","Император","Жрец","Влюбленные","Колесница","Сила","Отшельник","Колесо","Справедливость","Повешенный","Смерть","Умеренность","Дьявол","Башня","Звезда","Луна","Солнце","Суд","Мир"];
-    const FILES = ["TheFool","TheMagician","TheHighPriestess","TheEmpress","TheEmperor","TheHierophant","TheLovers","TheChariot","Strength","TheHermit","WheelOfFortune","Justice","TheHangedMan","Death","Temperance","TheDevil","TheTower","TheStar","TheMoon","TheSun","Judgement","TheWorld"];
-    
-    MAJORS.forEach((n,i)=>DB_FULL.push({name:n, img:`${BASE}${String(i).padStart(2,'0')}-${FILES[i]}.jpg`}));
-    
-    const SUIT_NAMES = ["Wands","Cups","Swords","Pentacles"]; 
-    const SUIT_RU = ["Жезлов","Кубков","Мечей","Пентаклей"]; 
-    const RANKS = ["Туз","2","3","4","5","6","7","8","9","10","Паж","Рыцарь","Королева","Король"];
-    
-    SUIT_NAMES.forEach((s, sIdx) => {
-        for(let r=1; r<=14; r++) {
-            DB_FULL.push({
-                name: `${RANKS[r-1]} ${SUIT_RU[sIdx]}`,
-                img: `${BASE}${s}${String(r).padStart(2,'0')}.jpg`
-            });
-        }
-    });
+    const DB = [];
+    const MAJORS = ["TheFool","TheMagician","TheHighPriestess","TheEmpress","TheEmperor","TheHierophant","TheLovers","TheChariot","Strength","TheHermit","WheelOfFortune","Justice","TheHangedMan","Death","Temperance","TheDevil","TheTower","TheStar","TheMoon","TheSun","Judgement","TheWorld"];
+    MAJORS.forEach((n,i)=>DB.push({name:n, img:`${BASE}${String(i).padStart(2,'0')}-${n}.jpg`}));
+    const SUITS = ["Wands","Cups","Swords","Pentacles"];
+    const RANKS = ["Ace","2","3","4","5","6","7","8","9","10","Page","Knight","Queen","King"];
+    SUITS.forEach(s=>{RANKS.forEach((r,i)=>DB.push({name:`${r} ${s}`, img:`${BASE}${s}${String(i+1).padStart(2,'0')}.jpg`}));});
 
     let session;
     let isScanning = false;
@@ -177,241 +103,500 @@
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
-    const counterVal = document.getElementById('target-counter');
-    const pFill = document.getElementById('p-fill');
+    const counter = document.getElementById('counter');
 
-    // === 3. INIT ===
     async function init() {
         try {
-            updateProgress(20, "LOADING MODEL (800px)...");
+            document.getElementById('status-txt').innerText = "LOADING MODEL 800...";
             session = await ort.InferenceSession.create(CONFIG.model, { executionProviders: ['wasm'] });
             
-            updateProgress(50, "STARTING CAMERA (FHD)...");
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: 'environment', width: { ideal: 1920 } } 
-            });
+            document.getElementById('status-txt').innerText = "CAMERA...";
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1920 } } });
             video.srcObject = stream;
             
-            // Канвас для нарезки 800x800
-            const cc = document.createElement('canvas');
-            cc.width = CONFIG.size; cc.height = CONFIG.size;
-            cropCtx = cc.getContext('2d', {willReadFrequently: true});
+            const cc = document.createElement('canvas'); cc.width=CONFIG.size; cc.height=CONFIG.size;
+            cropCtx = cc.getContext('2d', {willReadFrequently:true});
 
             video.onloadedmetadata = () => {
                 video.play();
                 resize();
-                updateProgress(100, "READY");
-                setTimeout(() => {
-                    document.getElementById('loader').style.display = 'none';
-                    requestAnimationFrame(realtimeLoop);
-                }, 500);
+                document.getElementById('loader').style.display='none';
+                requestAnimationFrame(loop);
             };
-        } catch(e) {
-            document.getElementById('err-txt').innerText = e.message;
-        }
+        } catch(e) { document.getElementById('err-txt').innerText = e.message; }
     }
     window.onload = init;
     window.addEventListener('resize', resize);
     function resize() { canvas.width = video.videoWidth; canvas.height = video.videoHeight; }
-    function updateProgress(pct, txt) { pFill.style.width = pct+"%"; document.getElementById('status-txt').innerText = txt; }
 
-    // === 4. PREVIEW (CENTER 800px) ===
-    async function realtimeLoop() {
+    // === ПРЕВЬЮ ===
+    async function loop() {
         if(isScanning) return;
         const vW = canvas.width, vH = canvas.height;
         ctx.clearRect(0,0,vW,vH);
         
         const dim = Math.min(vW, vH);
         const sX = (vW-dim)/2, sY = (vH-dim)/2;
-
-        // Рамка зоны
-        ctx.strokeStyle = "rgba(255,255,255,0.2)"; ctx.lineWidth = 1;
-        ctx.strokeRect(sX, sY, dim, dim);
+        ctx.strokeStyle="rgba(255,255,255,0.3)"; ctx.lineWidth=2;
+        ctx.strokeRect(sX,sY,dim,dim);
 
         try {
-            // Инференс по центру (для превью)
-            const tensor = await getTensor(sX, sY, dim, dim);
+            const tensor = await getTensor(sX,sY,dim,dim);
             const res = await session.run({ [session.inputNames[0]]: tensor });
-            const boxes = parseYOLO(res[session.outputNames[0]]);
+            const output = res[session.outputNames[0]];
             
-            // Фильтр
+            // ВАЖНО: Используем новый умный парсер
+            const boxes = smartParse(output);
             const valid = boxes.filter(b => b.score > CONFIG.conf);
-
-            counterVal.innerText = valid.length;
-            if(valid.length > 0) {
-                counterVal.style.color = "#0f0"; counterVal.style.borderColor = "#0f0";
-            } else {
-                counterVal.style.color = "#555"; counterVal.style.borderColor = "#555";
-            }
-
-            // Отрисовка зеленых рамок
+            
+            counter.innerText = valid.length;
             const scale = dim / CONFIG.size;
-            ctx.lineWidth = 3;
+            ctx.lineWidth=3; ctx.strokeStyle="#0f0";
             
             valid.forEach(b => {
-                const bx = sX + (b.x * scale);
-                const by = sY + (b.y * scale);
-                const bw = b.w * scale;
-                const bh = b.h * scale;
-
-                ctx.strokeStyle = "#0f0";
-                ctx.strokeRect(bx - bw/2, by - bh/2, bw, bh);
-                
-                // Уверенность
-                ctx.fillStyle = "#fff"; ctx.font = "12px monospace";
-                ctx.fillText(Math.round(b.score*100)+"%", bx - bw/2, by - bh/2 - 5);
+                ctx.strokeRect(sX+(b.x*scale)-(b.w*scale)/2, sY+(b.y*scale)-(b.h*scale)/2, b.w*scale, b.h*scale);
             });
         } catch(e) {}
-
-        requestAnimationFrame(realtimeLoop);
+        requestAnimationFrame(loop);
     }
 
-    // === 5. HD SCAN (TILING 800) ===
-    async function runHDScan() {
+    // === SCAN ===
+    async function runScan() {
         isScanning = true;
         video.pause();
-        ctx.clearRect(0,0,canvas.width,canvas.height);
-        document.getElementById('ui-layer').style.display = 'none';
-        document.getElementById('loader').style.display = 'flex';
-        updateProgress(0, "PROCESSING TILES...");
-
-        const vW = video.videoWidth, vH = video.videoHeight;
+        document.getElementById('loader').style.display='flex';
+        document.getElementById('status-txt').innerText = "TILING 800PX...";
         
-        // ВАЖНО: Нарезка под 800px
-        // Берем 60% экрана, чтобы был нахлест
-        const tW = vW * 0.6; 
-        const tH = vH * 0.6;
-        const tiles = [{x:0,y:0}, {x:vW-tW,y:0}, {x:0,y:vH-tH}, {x:vW-tW,y:vH-tH}];
-        let allBoxes = [];
+        const vW = video.videoWidth, vH = video.videoHeight;
+        const tW = vW*0.6, tH = vH*0.6; // 60% tiles
+        const tiles = [{x:0,y:0},{x:vW-tW,y:0},{x:0,y:vH-tH},{x:vW-tW,y:vH-tH}];
+        let all = [];
 
-        for(let i=0; i<tiles.length; i++) {
-            updateProgress((i+1)*20, `SECTOR ${i+1}/4...`);
-            await new Promise(r => setTimeout(r, 40)); 
-            
-            const t = tiles[i];
-            const tensor = await getTensor(t.x, t.y, tW, tH);
+        for(let t of tiles) {
+            await new Promise(r=>setTimeout(r,50));
+            const tensor = await getTensor(t.x,t.y,tW,tH);
             const res = await session.run({ [session.inputNames[0]]: tensor });
-            const local = parseYOLO(res[session.outputNames[0]]);
             
-            const sX = tW / CONFIG.size;
-            const sY = tH / CONFIG.size;
-
+            // Умный парсинг результата
+            const local = smartParse(res[session.outputNames[0]]);
+            
+            const sX = tW/CONFIG.size, sY = tH/CONFIG.size;
             local.forEach(b => {
                 if(b.score > CONFIG.conf) {
-                    allBoxes.push({
-                        cls: b.cls, score: b.score,
-                        x: t.x + (b.x * sX), y: t.y + (b.y * sY),
-                        w: b.w * sX, h: b.h * sY
-                    });
+                    all.push({ cls:b.cls, score:b.score, x:t.x+(b.x*sX), y:t.y+(b.y*sY), w:b.w*sX, h:b.h*sY });
                 }
             });
         }
 
-        updateProgress(90, "GEOMETRY...");
-        const finalBoxes = globalNMS(allBoxes);
-        renderGeometry(finalBoxes);
+        const final = nms(all);
+        render(final, vW, vH);
     }
 
-    // === HELPERS ===
-    async function getTensor(sx, sy, sw, sh) {
-        cropCtx.drawImage(video, sx, sy, sw, sh, 0, 0, CONFIG.size, CONFIG.size);
-        const d = cropCtx.getImageData(0,0,CONFIG.size,CONFIG.size).data;
-        const f = new Float32Array(3*CONFIG.size**2);
-        for(let i=0; i<CONFIG.size**2; i++) {
-            f[i] = d[i*4]/255.0; 
-            f[CONFIG.size**2+i] = d[i*4+1]/255.0; 
-            f[2*CONFIG.size**2+i] = d[i*4+2]/255.0;
-        }
-        return new ort.Tensor('float32', f, [1, 3, CONFIG.size, CONFIG.size]);
-    }
-
-    function parseYOLO(output) {
+    // === ЯДРО: УМНЫЙ ПАРСЕР (ИСПРАВЛЕНИЕ ОШИБКИ) ===
+    function smartParse(output) {
+        const dims = output.dims;
         const data = output.data;
         const boxes = [];
-        const count = output.dims[1]; 
-        for(let i=0; i<count; i++) {
-            const off = i*6;
-            const score = data[off+4];
-            const x1=data[off], y1=data[off+1], x2=data[off+2], y2=data[off+3];
-            boxes.push({ x:(x1+x2)/2, y:(y1+y2)/2, w:x2-x1, h:y2-y1, score:score, cls:data[off+5] });
+
+        // ВАРИАНТ 1: YOLOv8 STANDARD [1, 82, 8400]
+        // Это то, что выдает rider_gold_800.onnx скорее всего
+        if (dims[1] === 82 || dims[1] === 84) { 
+            const numClasses = dims[1] - 4; // 78
+            const numAnchors = dims[2];     // 8400
+            
+            for (let i = 0; i < numAnchors; i++) {
+                // Ищем макс класс
+                let maxScore = 0;
+                let cls = -1;
+                // Классы идут со смещением 4
+                for (let c = 0; c < numClasses; c++) {
+                    const val = data[(c + 4) * numAnchors + i]; // Читаем по колонкам!
+                    if (val > maxScore) { maxScore = val; cls = c; }
+                }
+
+                if (maxScore > CONFIG.conf) {
+                    const cx = data[0 * numAnchors + i];
+                    const cy = data[1 * numAnchors + i];
+                    const w  = data[2 * numAnchors + i];
+                    const h  = data[3 * numAnchors + i];
+                    boxes.push({ x:cx, y:cy, w:w, h:h, score:maxScore, cls:cls });
+                }
+            }
         }
+        // ВАРИАНТ 2: YOLOv10/End2End [1, 300, 6]
+        else if (dims[2] === 6) {
+            const count = dims[1];
+            for (let i = 0; i < count; i++) {
+                const off = i * 6;
+                const score = data[off + 4];
+                if (score > CONFIG.conf) {
+                    const x1=data[off], y1=data[off+1], x2=data[off+2], y2=data[off+3];
+                    boxes.push({ x:(x1+x2)/2, y:(y1+y2)/2, w:x2-x1, h:y2-y1, score:score, cls:data[off+5] });
+                }
+            }
+        }
+        
         return boxes;
     }
 
-    function globalNMS(boxes) {
+    async function getTensor(x,y,w,h) {
+        cropCtx.drawImage(video,x,y,w,h,0,0,CONFIG.size,CONFIG.size);
+        const d = cropCtx.getImageData(0,0,CONFIG.size,CONFIG.size).data;
+        const f = new Float32Array(3*CONFIG.size**2);
+        for(let i=0;i<CONFIG.size**2;i++) {
+            f[i]=d[i*4]/255; f[CONFIG.size**2+i]=d[i*4+1]/255; f[2*CONFIG.size**2+i]=d[i*4+2]/255;
+        }
+        return new ort.Tensor('float32', f, [1,3,CONFIG.size,CONFIG.size]);
+    }
+
+    function nms(boxes) {
         boxes.sort((a,b)=>b.score-a.score);
-        const res = [];
+        const res=[];
         while(boxes.length) {
-            const best = boxes.shift(); res.push(best);
-            boxes = boxes.filter(b => {
-                const x1=Math.max(best.x-best.w/2, b.x-b.w/2), y1=Math.max(best.y-best.h/2, b.y-b.h/2);
-                const x2=Math.min(best.x+best.w/2, b.x+b.w/2), y2=Math.min(best.y+best.h/2, b.y+b.h/2);
-                if(x2<x1 || y2<y1) return true;
-                const inter=(x2-x1)*(y2-y1);
-                const union=(best.w*best.h)+(b.w*b.h)-inter;
-                return (inter/union) < CONFIG.iou;
+            const b=boxes.shift(); res.push(b);
+            boxes=boxes.filter(o=>{
+                const x1=Math.max(b.x-b.w/2, o.x-o.w/2), y1=Math.max(b.y-b.h/2, o.y-o.h/2);
+                const x2=Math.min(b.x+b.w/2, o.x+o.w/2), y2=Math.min(b.y+b.h/2, o.y+o.h/2);
+                if(x2<x1||y2<y1) return true;
+                const i=(x2-x1)*(y2-y1), u=(b.w*b.h)+(o.w*o.h)-i;
+                return (i/u)<CONFIG.iou;
             });
         }
         return res;
     }
 
-    // === RENDER ===
-    function renderGeometry(boxes) {
-        document.getElementById('loader').style.display = 'none';
-        document.getElementById('result-screen').style.display = 'flex';
-        const table = document.getElementById('table-surface');
-        table.innerHTML = "";
-
-        if(boxes.length === 0) {
-            table.innerHTML = '<div style="color:#666;text-align:center;margin-top:50%;">NO CARDS</div>'; return;
-        }
+    function render(boxes, vW, vH) {
+        document.getElementById('loader').style.display='none';
+        document.getElementById('result-screen').style.display='flex';
+        const t = document.getElementById('table-surface'); t.innerHTML="";
+        
+        if(!boxes.length) { t.innerHTML='<div style="color:#666;text-align:center;margin-top:50%">EMPTY</div>'; return; }
 
         let minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
-        boxes.forEach(b => {
-            minX = Math.min(minX, b.x); maxX = Math.max(maxX, b.x);
-            minY = Math.min(minY, b.y); maxY = Math.max(maxY, b.y);
-        });
+        boxes.forEach(b=>{ minX=Math.min(minX,b.x); maxX=Math.max(maxX,b.x); minY=Math.min(minY,b.y); maxY=Math.max(maxY,b.y); });
+        
+        const avgW = boxes.reduce((a,b)=>a+b.w,0)/boxes.length;
+        const pad = avgW*0.8, W=(maxX-minX)+pad*2, H=(maxY-minY)+pad*2, cX=(minX+maxX)/2, cY=(minY+maxY)/2;
 
-        const avgW = boxes.reduce((a,b)=>a+b.w,0) / boxes.length;
-        const pad = avgW * 0.7;
-        const spreadW = (maxX - minX) + pad * 2;
-        const spreadH = (maxY - minY) + pad * 2;
-        const cX = (minX + maxX) / 2;
-        const cY = (minY + maxY) / 2;
-        const cardWPct = (avgW / spreadW) * 90;
-
-        boxes.forEach((b, i) => {
-            const card = DB_FULL[b.cls] || {name:'?', img:''};
-            const el = document.createElement('div');
-            el.className = 'phantom-card';
-
-            const left = 50 + ((b.x - cX) / spreadW) * 95;
-            const top  = 50 + ((b.y - cY) / spreadH) * 95;
-
-            el.style.left = left + "%";
-            el.style.top = top + "%";
-            el.style.width = cardWPct + "%";
+        boxes.forEach((b,i)=>{
+            const c = DB[b.cls]||{name:'?',img:''};
+            const el = document.createElement('div'); el.className='phantom-card';
+            const l = 50+((b.x-cX)/W)*90, tp = 50+((b.y-cY)/H)*90, wp = (avgW/W)*90;
             
-            if (b.w > b.h * 1.15) {
-                el.style.transform = "translate(-50%, -50%) rotate(90deg)";
-            } else {
-                el.style.transform = "translate(-50%, -50%)";
-            }
-
-            el.style.backgroundImage = `url('${card.img}')`;
-            el.innerHTML = `<div class="card-badge">${i+1}</div><div class="card-label">${card.name}</div>`;
+            el.style.left=l+"%"; el.style.top=tp+"%"; el.style.width=wp+"%"; el.style.height=(wp*1.7)+"%";
+            el.style.backgroundImage=`url('${c.img}')`;
+            if(b.w > b.h*1.2) el.style.transform="translate(-50%,-50%) rotate(90deg)";
+            else el.style.transform="translate(-50%,-50%)";
             
-            table.appendChild(el);
-            setTimeout(()=>el.classList.add('vis'), i*100);
+            el.innerHTML=`<div class="card-badge">${i+1}</div>`;
+            t.appendChild(el);
         });
     }
 
     function reset() {
-        isScanning = false;
-        document.getElementById('result-screen').style.display='none';
-        document.getElementById('ui-layer').style.display='flex';
-        video.play();
-        requestAnimationFrame(realtimeLoop);
+        isScanning=false; document.getElementById('result-screen').style.display='none';
+        video.play(); requestAnimationFrame(loop);
+    }
+</script>
+</body>
+</html><!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>RIDER 800 FIX</title>
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
+    <style>
+        body { margin: 0; background: #000; font-family: 'Segoe UI', monospace; overflow: hidden; user-select: none; }
+        #app { position: relative; width: 100vw; height: 100vh; display: flex; flex-direction: column; }
+        video { width: 100%; height: 100%; object-fit: cover; }
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
+        
+        #ui-layer { position: absolute; top:0; left:0; width:100%; height:100%; z-index:20; display:flex; flex-direction:column; justify-content:space-between; pointer-events:none; }
+        
+        .hud-top { padding: 20px; text-align: center; background: linear-gradient(180deg, rgba(0,0,0,0.8), transparent); }
+        .counter-box { font-size: 40px; color: #0f0; font-weight: bold; text-shadow: 0 0 10px #0f0; }
+        
+        .hud-bot { padding: 40px; display: flex; justify-content: center; background: linear-gradient(0deg, rgba(0,0,0,0.8), transparent); pointer-events: auto; }
+        
+        #scan-btn {
+            width: 80px; height: 80px; border-radius: 50%; border: 4px solid #fff;
+            background: rgba(255,255,255,0.2); cursor: pointer; display: flex; align-items: center; justify-content: center;
+        }
+        #scan-btn::after { content: ''; width: 60px; height: 60px; background: #fff; border-radius: 50%; }
+        
+        /* RESULT SCREEN */
+        #result-screen { position: absolute; top:0; left:0; width:100%; height:100%; background:#111; z-index:50; display:none; flex-direction:column; }
+        #table-surface { flex: 1; margin: 20px; border: 1px solid #444; position: relative; background: #222; border-radius: 8px; overflow: hidden; }
+        
+        .phantom-card {
+            position: absolute; border: 2px solid #ffd700; background-size: cover; 
+            transform: translate(-50%, -50%); transition: 0.3s;
+        }
+        .card-badge { 
+            position: absolute; top: -10px; left: -10px; width: 24px; height: 24px; 
+            background: #ffd700; color: #000; border-radius: 50%; font-weight: bold; 
+            display: flex; align-items: center; justify-content: center; font-size: 12px;
+        }
+
+        #controls { padding: 20px; display: flex; justify-content: center; }
+        .btn-retry { padding: 15px 40px; background: transparent; border: 1px solid #fff; color: #fff; font-size: 16px; cursor: pointer; }
+
+        /* LOADER */
+        #loader { position: absolute; top:0; left:0; width:100%; height:100%; background:#000; z-index:100; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+        #status-txt { color: #0f0; margin-top: 10px; font-family: monospace; }
+        #err-txt { color: red; margin-top: 10px; font-size: 12px; text-align: center; max-width: 80%; }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div id="loader">
+        <h2 style="color:#fff;">RIDER 800 FIX</h2>
+        <div id="status-txt">LOADING...</div>
+        <div id="err-txt"></div>
+    </div>
+
+    <div id="cam-container" style="flex:1; position:relative; overflow:hidden;">
+        <video id="video" playsinline muted autoplay></video>
+        <canvas id="canvas"></canvas>
+    </div>
+
+    <div id="ui-layer">
+        <div class="hud-top">
+            <div class="counter-box" id="counter">0</div>
+            <div style="color:#fff; font-size:12px;">КАРТ (800PX)</div>
+        </div>
+        <div class="hud-bot">
+            <div id="scan-btn" onclick="runScan()"></div>
+        </div>
+    </div>
+
+    <div id="result-screen">
+        <div style="padding:15px; text-align:center; color:#888;">SCANNED</div>
+        <div id="table-surface"></div>
+        <div id="controls"><button class="btn-retry" onclick="reset()">RESET</button></div>
+    </div>
+</div>
+
+<script>
+    ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/";
+    
+    const CONFIG = {
+        model: './rider_gold_800.onnx', // ИСПОЛЬЗУЕМ 800PX МОДЕЛЬ
+        size: 800,
+        conf: 0.50, // Строгий порог
+        iou: 0.45 
+    };
+
+    // БАЗА КАРТ (ПОЛНАЯ)
+    const BASE = "https://raw.githubusercontent.com/marataitester-blip/rider-tarot-card/main/Cards-jpg/Cards-jpg/";
+    const DB = [];
+    const MAJORS = ["TheFool","TheMagician","TheHighPriestess","TheEmpress","TheEmperor","TheHierophant","TheLovers","TheChariot","Strength","TheHermit","WheelOfFortune","Justice","TheHangedMan","Death","Temperance","TheDevil","TheTower","TheStar","TheMoon","TheSun","Judgement","TheWorld"];
+    MAJORS.forEach((n,i)=>DB.push({name:n, img:`${BASE}${String(i).padStart(2,'0')}-${n}.jpg`}));
+    const SUITS = ["Wands","Cups","Swords","Pentacles"];
+    const RANKS = ["Ace","2","3","4","5","6","7","8","9","10","Page","Knight","Queen","King"];
+    SUITS.forEach(s=>{RANKS.forEach((r,i)=>DB.push({name:`${r} ${s}`, img:`${BASE}${s}${String(i+1).padStart(2,'0')}.jpg`}));});
+
+    let session;
+    let isScanning = false;
+    let cropCtx;
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const counter = document.getElementById('counter');
+
+    async function init() {
+        try {
+            document.getElementById('status-txt').innerText = "LOADING MODEL 800...";
+            session = await ort.InferenceSession.create(CONFIG.model, { executionProviders: ['wasm'] });
+            
+            document.getElementById('status-txt').innerText = "CAMERA...";
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1920 } } });
+            video.srcObject = stream;
+            
+            const cc = document.createElement('canvas'); cc.width=CONFIG.size; cc.height=CONFIG.size;
+            cropCtx = cc.getContext('2d', {willReadFrequently:true});
+
+            video.onloadedmetadata = () => {
+                video.play();
+                resize();
+                document.getElementById('loader').style.display='none';
+                requestAnimationFrame(loop);
+            };
+        } catch(e) { document.getElementById('err-txt').innerText = e.message; }
+    }
+    window.onload = init;
+    window.addEventListener('resize', resize);
+    function resize() { canvas.width = video.videoWidth; canvas.height = video.videoHeight; }
+
+    // === ПРЕВЬЮ ===
+    async function loop() {
+        if(isScanning) return;
+        const vW = canvas.width, vH = canvas.height;
+        ctx.clearRect(0,0,vW,vH);
+        
+        const dim = Math.min(vW, vH);
+        const sX = (vW-dim)/2, sY = (vH-dim)/2;
+        ctx.strokeStyle="rgba(255,255,255,0.3)"; ctx.lineWidth=2;
+        ctx.strokeRect(sX,sY,dim,dim);
+
+        try {
+            const tensor = await getTensor(sX,sY,dim,dim);
+            const res = await session.run({ [session.inputNames[0]]: tensor });
+            const output = res[session.outputNames[0]];
+            
+            // ВАЖНО: Используем новый умный парсер
+            const boxes = smartParse(output);
+            const valid = boxes.filter(b => b.score > CONFIG.conf);
+            
+            counter.innerText = valid.length;
+            const scale = dim / CONFIG.size;
+            ctx.lineWidth=3; ctx.strokeStyle="#0f0";
+            
+            valid.forEach(b => {
+                ctx.strokeRect(sX+(b.x*scale)-(b.w*scale)/2, sY+(b.y*scale)-(b.h*scale)/2, b.w*scale, b.h*scale);
+            });
+        } catch(e) {}
+        requestAnimationFrame(loop);
+    }
+
+    // === SCAN ===
+    async function runScan() {
+        isScanning = true;
+        video.pause();
+        document.getElementById('loader').style.display='flex';
+        document.getElementById('status-txt').innerText = "TILING 800PX...";
+        
+        const vW = video.videoWidth, vH = video.videoHeight;
+        const tW = vW*0.6, tH = vH*0.6; // 60% tiles
+        const tiles = [{x:0,y:0},{x:vW-tW,y:0},{x:0,y:vH-tH},{x:vW-tW,y:vH-tH}];
+        let all = [];
+
+        for(let t of tiles) {
+            await new Promise(r=>setTimeout(r,50));
+            const tensor = await getTensor(t.x,t.y,tW,tH);
+            const res = await session.run({ [session.inputNames[0]]: tensor });
+            
+            // Умный парсинг результата
+            const local = smartParse(res[session.outputNames[0]]);
+            
+            const sX = tW/CONFIG.size, sY = tH/CONFIG.size;
+            local.forEach(b => {
+                if(b.score > CONFIG.conf) {
+                    all.push({ cls:b.cls, score:b.score, x:t.x+(b.x*sX), y:t.y+(b.y*sY), w:b.w*sX, h:b.h*sY });
+                }
+            });
+        }
+
+        const final = nms(all);
+        render(final, vW, vH);
+    }
+
+    // === ЯДРО: УМНЫЙ ПАРСЕР (ИСПРАВЛЕНИЕ ОШИБКИ) ===
+    function smartParse(output) {
+        const dims = output.dims;
+        const data = output.data;
+        const boxes = [];
+
+        // ВАРИАНТ 1: YOLOv8 STANDARD [1, 82, 8400]
+        // Это то, что выдает rider_gold_800.onnx скорее всего
+        if (dims[1] === 82 || dims[1] === 84) { 
+            const numClasses = dims[1] - 4; // 78
+            const numAnchors = dims[2];     // 8400
+            
+            for (let i = 0; i < numAnchors; i++) {
+                // Ищем макс класс
+                let maxScore = 0;
+                let cls = -1;
+                // Классы идут со смещением 4
+                for (let c = 0; c < numClasses; c++) {
+                    const val = data[(c + 4) * numAnchors + i]; // Читаем по колонкам!
+                    if (val > maxScore) { maxScore = val; cls = c; }
+                }
+
+                if (maxScore > CONFIG.conf) {
+                    const cx = data[0 * numAnchors + i];
+                    const cy = data[1 * numAnchors + i];
+                    const w  = data[2 * numAnchors + i];
+                    const h  = data[3 * numAnchors + i];
+                    boxes.push({ x:cx, y:cy, w:w, h:h, score:maxScore, cls:cls });
+                }
+            }
+        }
+        // ВАРИАНТ 2: YOLOv10/End2End [1, 300, 6]
+        else if (dims[2] === 6) {
+            const count = dims[1];
+            for (let i = 0; i < count; i++) {
+                const off = i * 6;
+                const score = data[off + 4];
+                if (score > CONFIG.conf) {
+                    const x1=data[off], y1=data[off+1], x2=data[off+2], y2=data[off+3];
+                    boxes.push({ x:(x1+x2)/2, y:(y1+y2)/2, w:x2-x1, h:y2-y1, score:score, cls:data[off+5] });
+                }
+            }
+        }
+        
+        return boxes;
+    }
+
+    async function getTensor(x,y,w,h) {
+        cropCtx.drawImage(video,x,y,w,h,0,0,CONFIG.size,CONFIG.size);
+        const d = cropCtx.getImageData(0,0,CONFIG.size,CONFIG.size).data;
+        const f = new Float32Array(3*CONFIG.size**2);
+        for(let i=0;i<CONFIG.size**2;i++) {
+            f[i]=d[i*4]/255; f[CONFIG.size**2+i]=d[i*4+1]/255; f[2*CONFIG.size**2+i]=d[i*4+2]/255;
+        }
+        return new ort.Tensor('float32', f, [1,3,CONFIG.size,CONFIG.size]);
+    }
+
+    function nms(boxes) {
+        boxes.sort((a,b)=>b.score-a.score);
+        const res=[];
+        while(boxes.length) {
+            const b=boxes.shift(); res.push(b);
+            boxes=boxes.filter(o=>{
+                const x1=Math.max(b.x-b.w/2, o.x-o.w/2), y1=Math.max(b.y-b.h/2, o.y-o.h/2);
+                const x2=Math.min(b.x+b.w/2, o.x+o.w/2), y2=Math.min(b.y+b.h/2, o.y+o.h/2);
+                if(x2<x1||y2<y1) return true;
+                const i=(x2-x1)*(y2-y1), u=(b.w*b.h)+(o.w*o.h)-i;
+                return (i/u)<CONFIG.iou;
+            });
+        }
+        return res;
+    }
+
+    function render(boxes, vW, vH) {
+        document.getElementById('loader').style.display='none';
+        document.getElementById('result-screen').style.display='flex';
+        const t = document.getElementById('table-surface'); t.innerHTML="";
+        
+        if(!boxes.length) { t.innerHTML='<div style="color:#666;text-align:center;margin-top:50%">EMPTY</div>'; return; }
+
+        let minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
+        boxes.forEach(b=>{ minX=Math.min(minX,b.x); maxX=Math.max(maxX,b.x); minY=Math.min(minY,b.y); maxY=Math.max(maxY,b.y); });
+        
+        const avgW = boxes.reduce((a,b)=>a+b.w,0)/boxes.length;
+        const pad = avgW*0.8, W=(maxX-minX)+pad*2, H=(maxY-minY)+pad*2, cX=(minX+maxX)/2, cY=(minY+maxY)/2;
+
+        boxes.forEach((b,i)=>{
+            const c = DB[b.cls]||{name:'?',img:''};
+            const el = document.createElement('div'); el.className='phantom-card';
+            const l = 50+((b.x-cX)/W)*90, tp = 50+((b.y-cY)/H)*90, wp = (avgW/W)*90;
+            
+            el.style.left=l+"%"; el.style.top=tp+"%"; el.style.width=wp+"%"; el.style.height=(wp*1.7)+"%";
+            el.style.backgroundImage=`url('${c.img}')`;
+            if(b.w > b.h*1.2) el.style.transform="translate(-50%,-50%) rotate(90deg)";
+            else el.style.transform="translate(-50%,-50%)";
+            
+            el.innerHTML=`<div class="card-badge">${i+1}</div>`;
+            t.appendChild(el);
+        });
+    }
+
+    function reset() {
+        isScanning=false; document.getElementById('result-screen').style.display='none';
+        video.play(); requestAnimationFrame(loop);
     }
 </script>
 </body>
