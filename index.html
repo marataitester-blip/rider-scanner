@@ -6,7 +6,7 @@
     name="viewport"
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
   />
-  <title>Tarot YOLOv8s · 800 · board v5.0</title>
+  <title>Tarot YOLOv8s · 800 · board v6.0</title>
   <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
   <style>
     body {
@@ -81,7 +81,7 @@
       pointer-events: auto;
     }
     #scan-btn {
-      min-width: 90px;
+      min-width: 120px;
       padding: 6px 14px;
       border-radius: 20px;
       border: 1px solid rgba(255,255,255,0.8);
@@ -130,7 +130,7 @@
         <div class="block">
           <div class="status" id="status-text">INIT</div>
           <div class="sub">YOLOv8s · ONNX · 800px</div>
-          <div class="version">build: board-v5.0 · rider_gold_800.onnx · 78 карт</div>
+          <div class="version">build: board-v6.0 · rider_gold_800.onnx · 78 карт</div>
         </div>
         <div class="right-top">
           <div class="sub" id="info-res"></div>
@@ -150,15 +150,15 @@
   const CONFIG = {
     modelPath: "./rider_gold_800.onnx",
     inputSize: 800,
-    confThreshold: 0.25,
+    conf: 0.25,          // твой порог уверенности, под который написан парсер
     nmsThreshold: 0.45,
   };
 
   let session = null;
   let modelInputName = "";
-  let video = document.getElementById("video");
-  let canvas = document.getElementById("canvas");
-  let ctx = canvas.getContext("2d");
+  const video = document.getElementById("video");
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
   let isScanning = false;
 
   window.onerror = function (msg, url, line, col, error) {
@@ -314,66 +314,73 @@
     };
   }
 
-  function parseYOLOv8Output(output) {
-    const boxes = [];
-    const dims = output.dims;
+  // === ПАРСЕР ДЛЯ RIDER_GOLD_800.ONNX ===
+  function parseYOLOv8_Specific(output) {
+    const dims = output.dims;          // ожидаем [1, 82, 13125]
     const data = output.data;
 
-    // Ожидаемый формат экспорта YOLOv8: [1, 4+num_classes, anchors] [web:51][web:48]
-    if (dims.length === 3 && dims[0] === 1) {
-      const numClasses = dims[1] - 4;
-      const numAnchors = dims[2];
+    const numAnchors = dims[2];       // 13125
+    const numClasses = dims[1] - 4;   // 78
 
-      for (let i = 0; i < numAnchors; i++) {
-        let maxScore = 0;
-        let cls = -1;
-        for (let c = 0; c < numClasses; c++) {
-          const s = data[(4 + c) * numAnchors + i];
-          if (s > maxScore) {
-            maxScore = s;
-            cls = c;
-          }
+    const boxes = [];
+
+    for (let i = 0; i < numAnchors; i++) {
+      let maxScore = 0;
+      let cls = -1;
+
+      // классы начинаются с 4-го ряда
+      for (let c = 0; c < numClasses; c++) {
+        const score = data[(c + 4) * numAnchors + i];
+        if (score > maxScore) {
+          maxScore = score;
+          cls = c;
         }
-        if (maxScore < CONFIG.confThreshold) continue;
-
-        const x = data[0 * numAnchors + i];
-        const y = data[1 * numAnchors + i];
-        const w = data[2 * numAnchors + i];
-        const h = data[3 * numAnchors + i];
-
-        boxes.push([x - w / 2, y - h / 2, w, h, maxScore, cls]);
       }
-    } else {
-      showError("Неожиданный формат вывода YOLOv8: " + JSON.stringify(dims));
-    }
 
+      if (maxScore > CONFIG.conf) {
+        const cx = data[0 * numAnchors + i];
+        const cy = data[1 * numAnchors + i];
+        const w  = data[2 * numAnchors + i];
+        const h  = data[3 * numAnchors + i];
+
+        boxes.push({
+          x: cx,
+          y: cy,
+          w: w,
+          h: h,
+          score: maxScore,
+          cls: cls
+        });
+      }
+    }
     return boxes;
   }
 
   function getIoU(a, b) {
-    const x1 = Math.max(a[0], b[0]);
-    const y1 = Math.max(a[1], b[1]);
-    const x2 = Math.min(a[0] + a[2], b[0] + b[2]);
-    const y2 = Math.min(a[1] + a[3], b[1] + b[3]);
+    const x1 = Math.max(a.x, b.x);
+    const y1 = Math.max(a.y, b.y);
+    const x2 = Math.min(a.x + a.w, b.x + b.w);
+    const y2 = Math.min(a.y + a.h, b.y + b.h);
     const iw = Math.max(0, x2 - x1);
     const ih = Math.max(0, y2 - y1);
     const inter = iw * ih;
-    const areaA = a[2] * a[3];
-    const areaB = b[2] * b[3];
+    const areaA = a.w * a.h;
+    const areaB = b.w * b.h;
     return inter / (areaA + areaB - inter + 1e-6);
   }
 
   function nms(boxes) {
     if (!boxes.length) return [];
-    boxes.sort((a, b) => b[4] - a[4]);
+    const arr = boxes.slice().sort((a, b) => b.score - a.score);
     const selected = [];
-    const active = new Array(boxes.length).fill(true);
-    for (let i = 0; i < boxes.length; i++) {
+    const active = new Array(arr.length).fill(true);
+
+    for (let i = 0; i < arr.length; i++) {
       if (!active[i]) continue;
-      selected.push(boxes[i]);
-      for (let j = i + 1; j < boxes.length; j++) {
+      selected.push(arr[i]);
+      for (let j = i + 1; j < arr.length; j++) {
         if (!active[j]) continue;
-        const iou = getIoU(boxes[i], boxes[j]);
+        const iou = getIoU(arr[i], arr[j]);
         if (iou > CONFIG.nmsThreshold) active[j] = false;
       }
     }
@@ -381,23 +388,19 @@
   }
 
   function normalizeToBoard(boxes, vW, vH) {
-    // сортируем по раскладу: сверху вниз, слева направо
     const sorted = boxes
       .slice()
-      .sort((a, b) => (a[1] - b[1]) || (a[0] - b[0]));
+      .sort((a, b) => (a.y - b.y) || (a.x - b.x));
 
     return sorted.map((b, idx) => {
-      const [x, y, w, h, score, cls] = b;
-      const cx = x + w / 2;
-      const cy = y + h / 2;
-
-      const nx = cx / vW;  // 0..1
-      const ny = cy / vH;  // 0..1
-
+      const cx = b.x;
+      const cy = b.y;
+      const nx = cx / vW;
+      const ny = cy / vH;
       return {
         idx,
-        score,
-        cls,
+        score: b.score,
+        cls: b.cls,
         nx,
         ny
       };
@@ -405,12 +408,10 @@
   }
 
   function drawBoard(layout) {
-    // очищаем и рисуем "виртуальный стол"
     resize();
     ctx.fillStyle = "#050608";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // лёгкий градиент фона
     const grad = ctx.createRadialGradient(
       canvas.width / 2,
       canvas.height / 2,
@@ -424,7 +425,6 @@
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // границы стола
     const marginX = canvas.width * 0.07;
     const marginY = canvas.height * 0.12;
     const boardW = canvas.width - marginX * 2;
@@ -434,11 +434,9 @@
     ctx.lineWidth = 2;
     ctx.strokeRect(marginX, marginY, boardW, boardH);
 
-    // размер карты
     const cardW = boardW / 6;
     const cardH = cardW * 1.6;
 
-    // сами карты
     layout.forEach((card, i) => {
       const { nx, ny, score } = card;
       const px = marginX + nx * boardW;
@@ -447,16 +445,14 @@
       ctx.save();
       ctx.translate(px, py);
 
-      // слот карты
       ctx.strokeStyle = "rgba(255,255,255,0.9)";
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.roundRect(-cardW / 2, -cardH / 2, cardW, cardH, 8);
       ctx.stroke();
 
-      // индекс и уверенность
       ctx.fillStyle = "rgba(0,0,0,0.7)";
-      ctx.fillRect(-cardW / 2, -cardH / 2 - 18, 60, 16);
+      ctx.fillRect(-cardW / 2, -cardH / 2 - 18, 70, 16);
       ctx.fillStyle = "#ffd700";
       ctx.font = "11px Arial";
       ctx.fillText(
@@ -478,20 +474,22 @@
     showError("SCAN 800 → BOARD: старт");
 
     try {
-      const { tensor, offsetX, offsetY, scale, vW, vH } = await preprocessTo800();
+      const { tensor, vW, vH } = await preprocessTo800();
       const feeds = {};
       feeds[modelInputName] = tensor;
       const results = await session.run(feeds);
       const output = results[session.outputNames[0]];
 
-      const boxes = parseYOLOv8Output(output);
-      const finalBoxes = nms(boxes);
+      // для контроля можем один раз показать dims
+      // showError("OUTPUT DIMS: " + JSON.stringify(output.dims));
+
+      const rawBoxes = parseYOLOv8_Specific(output);
+      const finalBoxes = nms(rawBoxes);
 
       if (!finalBoxes.length) {
         showError("SCAN 800 → BOARD: боксов не найдено");
         document.getElementById("status-text").innerText = "READY (0)";
       } else {
-        // проекция на "виртуальный стол"
         const layout = normalizeToBoard(finalBoxes, vW, vH);
         drawBoard(layout);
         document.getElementById("status-text").innerText =
