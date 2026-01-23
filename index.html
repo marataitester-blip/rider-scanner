@@ -6,7 +6,7 @@
     name="viewport"
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
   />
-  <title>Tarot YOLOv8s · 800 · v4.0</title>
+  <title>Tarot YOLOv8s · 800 · board v5.0</title>
   <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
   <style>
     body {
@@ -106,7 +106,7 @@
       left: 8px;
       right: 8px;
       bottom: 20px;
-      font-size: 16px;
+      font-size: 15px;
       line-height: 1.4;
       color: #ffb0b0;
       background: rgba(0,0,0,0.9);
@@ -130,7 +130,7 @@
         <div class="block">
           <div class="status" id="status-text">INIT</div>
           <div class="sub">YOLOv8s · ONNX · 800px</div>
-          <div class="version">build: v4.0 · rider_gold_800.onnx · 78 классов</div>
+          <div class="version">build: board-v5.0 · rider_gold_800.onnx · 78 карт</div>
         </div>
         <div class="right-top">
           <div class="sub" id="info-res"></div>
@@ -138,7 +138,7 @@
         </div>
       </div>
       <div class="btn-row">
-        <div id="scan-btn" class="disabled">SCAN 800</div>
+        <div id="scan-btn" class="disabled">SCAN 800 → BOARD</div>
       </div>
     </div>
 
@@ -198,7 +198,7 @@
         try {
           video.play();
           resize();
-          drawFrame();
+          drawLive();
           document.getElementById("info-res").innerText =
             "video: " +
             video.videoWidth +
@@ -219,13 +219,15 @@
     }
   }
 
-  function drawFrame() {
+  function drawLive() {
     if (!video.videoWidth || !video.videoHeight) {
-      requestAnimationFrame(drawFrame);
+      requestAnimationFrame(drawLive);
       return;
     }
     resize();
-    const vRatio = video.videoWidth / video.videoHeight;
+    const vW = video.videoWidth;
+    const vH = video.videoHeight;
+    const vRatio = vW / vH;
     const cRatio = canvas.width / canvas.height;
     let dw, dh, dx, dy;
     if (vRatio > cRatio) {
@@ -242,7 +244,7 @@
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(video, dx, dy, dw, dh);
-    requestAnimationFrame(drawFrame);
+    requestAnimationFrame(drawLive);
   }
 
   async function initModel() {
@@ -262,7 +264,7 @@
       showError("OK: модель 800 загружена");
       const btn = document.getElementById("scan-btn");
       btn.classList.remove("disabled");
-      btn.onclick = scanOnce;
+      btn.onclick = scanAndProject;
     } catch (e) {
       showError("MODEL ERROR: " + e.message);
     }
@@ -307,6 +309,8 @@
       offsetX: dx,
       offsetY: dy,
       scale,
+      vW,
+      vH
     };
   }
 
@@ -315,7 +319,7 @@
     const dims = output.dims;
     const data = output.data;
 
-    // Ожидаем формат [1, 4+num_classes, anchors] для YOLOv8s ONNX [web:51][web:48]
+    // Ожидаемый формат экспорта YOLOv8: [1, 4+num_classes, anchors] [web:51][web:48]
     if (dims.length === 3 && dims[0] === 1) {
       const numClasses = dims[1] - 4;
       const numAnchors = dims[2];
@@ -376,16 +380,105 @@
     return selected;
   }
 
-  async function scanOnce() {
+  function normalizeToBoard(boxes, vW, vH) {
+    // сортируем по раскладу: сверху вниз, слева направо
+    const sorted = boxes
+      .slice()
+      .sort((a, b) => (a[1] - b[1]) || (a[0] - b[0]));
+
+    return sorted.map((b, idx) => {
+      const [x, y, w, h, score, cls] = b;
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+
+      const nx = cx / vW;  // 0..1
+      const ny = cy / vH;  // 0..1
+
+      return {
+        idx,
+        score,
+        cls,
+        nx,
+        ny
+      };
+    });
+  }
+
+  function drawBoard(layout) {
+    // очищаем и рисуем "виртуальный стол"
+    resize();
+    ctx.fillStyle = "#050608";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // лёгкий градиент фона
+    const grad = ctx.createRadialGradient(
+      canvas.width / 2,
+      canvas.height / 2,
+      canvas.width * 0.1,
+      canvas.width / 2,
+      canvas.height / 2,
+      canvas.width * 0.7
+    );
+    grad.addColorStop(0, "#111322");
+    grad.addColorStop(1, "#050608");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // границы стола
+    const marginX = canvas.width * 0.07;
+    const marginY = canvas.height * 0.12;
+    const boardW = canvas.width - marginX * 2;
+    const boardH = canvas.height - marginY * 2;
+
+    ctx.strokeStyle = "rgba(255,255,255,0.4)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(marginX, marginY, boardW, boardH);
+
+    // размер карты
+    const cardW = boardW / 6;
+    const cardH = cardW * 1.6;
+
+    // сами карты
+    layout.forEach((card, i) => {
+      const { nx, ny, score } = card;
+      const px = marginX + nx * boardW;
+      const py = marginY + ny * boardH;
+
+      ctx.save();
+      ctx.translate(px, py);
+
+      // слот карты
+      ctx.strokeStyle = "rgba(255,255,255,0.9)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(-cardW / 2, -cardH / 2, cardW, cardH, 8);
+      ctx.stroke();
+
+      // индекс и уверенность
+      ctx.fillStyle = "rgba(0,0,0,0.7)";
+      ctx.fillRect(-cardW / 2, -cardH / 2 - 18, 60, 16);
+      ctx.fillStyle = "#ffd700";
+      ctx.font = "11px Arial";
+      ctx.fillText(
+        "#" + (i + 1) + " • " + (score * 100).toFixed(0) + "%",
+        -cardW / 2 + 4,
+        -cardH / 2 - 5
+      );
+
+      ctx.restore();
+    });
+  }
+
+  async function scanAndProject() {
     if (isScanning || !session) return;
     isScanning = true;
     const btn = document.getElementById("scan-btn");
     btn.classList.add("disabled");
     document.getElementById("status-text").innerText = "SCANNING…";
-    showError("SCAN 800: старт");
+    showError("SCAN 800 → BOARD: старт");
 
     try {
-      const { tensor, offsetX, offsetY, scale } = await preprocessTo800();
+      const { tensor, offsetX, offsetY, scale, vW, vH } = await preprocessTo800();
       const feeds = {};
       feeds[modelInputName] = tensor;
       const results = await session.run(feeds);
@@ -394,56 +487,16 @@
       const boxes = parseYOLOv8Output(output);
       const finalBoxes = nms(boxes);
 
-      drawFrameOnce();
-
-      // рисуем рамки поверх
-      const vW = video.videoWidth;
-      const vH = video.videoHeight;
-      const vRatio = vW / vH;
-      const cRatio = canvas.width / canvas.height;
-      let dw, dh, dx, dy;
-      if (vRatio > cRatio) {
-        dh = canvas.height;
-        dw = dh * vRatio;
-        dx = (canvas.width - dw) / 2;
-        dy = 0;
-      } else {
-        dw = canvas.width;
-        dh = dw / vRatio;
-        dy = (canvas.height - dh) / 2;
-        dx = 0;
-      }
-
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = "#00ff9d";
-      ctx.font = "12px Arial";
-      ctx.fillStyle = "#00ff9d";
-
-      finalBoxes.forEach(b => {
-        const [x, y, w, h, score, cls] = b;
-
-        // координаты из 800×800 (после letterbox) в кадр видео
-        const vx1 = (x - offsetX) / scale;
-        const vy1 = (y - offsetY) / scale;
-        const vw = w / scale;
-        const vh = h / scale;
-
-        // из видео в экран
-        const ex = dx + (vx1 / vW) * dw;
-        const ey = dy + (vy1 / vH) * dh;
-        const ew = (vw / vW) * dw;
-        const eh = (vh / vH) * dh;
-
-        ctx.strokeRect(ex, ey, ew, eh);
-        ctx.fillText((score * 100).toFixed(0) + "%", ex + 2, ey + 12);
-      });
-
-      document.getElementById("status-text").innerText =
-        "READY (" + finalBoxes.length + ")";
       if (!finalBoxes.length) {
-        showError("SCAN 800: боксов не найдено");
+        showError("SCAN 800 → BOARD: боксов не найдено");
+        document.getElementById("status-text").innerText = "READY (0)";
       } else {
-        showError("SCAN 800: найдено " + finalBoxes.length + " боксов");
+        // проекция на "виртуальный стол"
+        const layout = normalizeToBoard(finalBoxes, vW, vH);
+        drawBoard(layout);
+        document.getElementById("status-text").innerText =
+          "READY (" + layout.length + ")";
+        showError("SCAN 800 → BOARD: карт на столе = " + layout.length);
       }
     } catch (e) {
       showError("SCAN ERROR: " + e.message);
@@ -451,30 +504,6 @@
       btn.classList.remove("disabled");
       isScanning = false;
     }
-  }
-
-  function drawFrameOnce() {
-    if (!video.videoWidth || !video.videoHeight) return;
-    resize();
-    const vW = video.videoWidth;
-    const vH = video.videoHeight;
-    const vRatio = vW / vH;
-    const cRatio = canvas.width / canvas.height;
-    let dw, dh, dx, dy;
-    if (vRatio > cRatio) {
-      dh = canvas.height;
-      dw = dh * vRatio;
-      dx = (canvas.width - dw) / 2;
-      dy = 0;
-    } else {
-      dw = canvas.width;
-      dh = dw / vRatio;
-      dy = (canvas.height - dh) / 2;
-      dx = 0;
-    }
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(video, dx, dy, dw, dh);
   }
 
   (async function main() {
