@@ -3,91 +3,94 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>RIDER: ULTIMATE SCANNER</title>
+    <title>RIDER: V2 PRO SCANNER</title>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
     <style>
-        /* === БАЗА === */
-        body { margin: 0; background: #000; overflow: hidden; font-family: 'Segoe UI', serif; user-select: none; }
+        /* === 1. БАЗОВЫЙ СТИЛЬ === */
+        body { margin: 0; background: #000; overflow: hidden; font-family: 'Segoe UI', serif; user-select: none; -webkit-tap-highlight-color: transparent; }
         #app { position: relative; width: 100vw; height: 100vh; background: #000; }
         
-        /* === КАМЕРА === */
+        /* === 2. КАМЕРА И ПРЕВЬЮ === */
         #video-container {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             z-index: 1; display: flex; justify-content: center; align-items: center;
             background: #000; transition: opacity 0.5s;
         }
         video { position: absolute; width: 100%; height: 100%; object-fit: cover; }
+        /* Холст для отрисовки рамок в реальном времени */
         #preview-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
 
-        /* === ВИРТУАЛЬНЫЙ СТОЛ === */
+        /* === 3. ВИРТУАЛЬНЫЙ СТОЛ (РЕЗУЛЬТАТ) === */
         #virtual-table {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: radial-gradient(circle, #1a1a1a 0%, #000000 100%);
             z-index: 10; display: none; perspective: 1000px;
         }
 
-        /* === UI === */
+        /* === 4. ИНТЕРФЕЙС (UI) === */
         #ui-layer {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             z-index: 20; pointer-events: none;
             display: flex; flex-direction: column; justify-content: space-between; align-items: center;
         }
 
-        /* ПЕРЕКЛЮЧАТЕЛЬ РЕЖИМОВ */
+        /* --- Переключатель режимов --- */
         #mode-switch-container {
             margin-top: 20px; pointer-events: auto;
             background: rgba(0,0,0,0.6); border-radius: 30px;
             border: 1px solid #ffd700; display: flex; overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
         .mode-btn {
-            padding: 10px 20px; font-size: 12px; color: #fff;
+            padding: 12px 25px; font-size: 13px; color: #fff;
             background: transparent; border: none; font-weight: bold;
             text-transform: uppercase; cursor: pointer; transition: 0.3s;
         }
-        .mode-btn.active {
-            background: #ffd700; color: #000;
-        }
+        .mode-btn.active { background: #ffd700; color: #000; }
 
-        /* ИНФО ПАНЕЛЬ */
+        /* --- Инфо-панель --- */
         #info-bar {
-            margin-top: 10px; color: #ffd700; font-size: 13px; text-shadow: 1px 1px 2px #000;
-            background: rgba(0,0,0,0.4); padding: 4px 10px; border-radius: 4px;
+            margin-top: 15px; color: #ffd700; font-size: 14px; text-shadow: 1px 1px 2px #000;
+            background: rgba(0,0,0,0.5); padding: 6px 15px; border-radius: 10px;
+            border: 1px solid rgba(255, 215, 0, 0.3); font-weight: 500;
         }
 
+        /* --- Кнопка сброса (на столе) --- */
         #reset-btn {
-            margin-top: 20px; padding: 10px 20px; border: 1px solid #ffd700; color: #ffd700;
+            margin-top: 20px; padding: 10px 25px; border: 1px solid #ffd700; color: #ffd700;
             background: rgba(0,0,0,0.8); border-radius: 20px;
             pointer-events: auto; cursor: pointer; display: none;
             font-size: 12px; text-transform: uppercase; letter-spacing: 1px;
         }
 
-        /* НИЖНЯЯ КНОПКА */
-        #bottom-bar { padding-bottom: 40px; pointer-events: auto; }
+        /* --- ГЛАВНАЯ КНОПКА (Шаттер) --- */
+        #bottom-bar { padding-bottom: 50px; pointer-events: auto; }
 
         #action-btn {
-            width: 80px; height: 80px;
+            width: 85px; height: 85px;
             border-radius: 50%; border: 4px solid #ffd700;
-            background: rgba(0,0,0,0.3);
-            box-shadow: 0 0 25px rgba(255, 215, 0, 0.4);
+            background: rgba(0,0,0,0.2); backdrop-filter: blur(4px);
+            box-shadow: 0 0 25px rgba(255, 215, 0, 0.5);
             cursor: pointer; display: flex; justify-content: center; align-items: center;
             transition: transform 0.2s, border-color 0.3s, box-shadow 0.3s;
         }
         #action-btn:active { transform: scale(0.9); background: rgba(255, 215, 0, 0.8); }
         
-        /* Стиль кнопки для SAHI (Голубой) */
+        /* Стиль кнопки для режима SAHI (Голубой) */
         #action-btn.sahi-style {
-            border-color: #00ffea; box-shadow: 0 0 25px rgba(0, 255, 234, 0.4);
+            border-color: #00ffea; box-shadow: 0 0 25px rgba(0, 255, 234, 0.5);
         }
         #action-btn.sahi-style:active { background: rgba(0, 255, 234, 0.8); }
 
+        /* --- Лоадер --- */
         #loader {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            color: #ffd700; background: rgba(0,0,0,0.9); padding: 15px 30px; border-radius: 10px;
-            border: 1px solid #ffd700; z-index: 30; font-size: 14px; display: block;
-            pointer-events: auto; text-align: center;
+            color: #ffd700; background: rgba(0,0,0,0.9); padding: 20px 40px; border-radius: 15px;
+            border: 1px solid #ffd700; z-index: 30; font-size: 16px; display: block;
+            pointer-events: auto; text-align: center; box-shadow: 0 0 30px rgba(0,0,0,0.8);
         }
 
-        /* === 3D КАРТА === */
+        /* === 5. 3D КАРТЫ === */
         .digital-card {
             position: absolute; transform-style: preserve-3d;
             transition: all 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
@@ -99,41 +102,50 @@
         }
         .card-front, .card-back {
             position: absolute; width: 100%; height: 100%; backface-visibility: hidden;
-            border-radius: 6px; box-shadow: 0 10px 20px rgba(0,0,0,0.8);
+            border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.9);
             border: 1px solid #cfaa48; background-size: cover; background-position: center;
         }
+        /* ВАЖНО: Путь к рубашке должен быть верным */
         .card-back { background-image: url('./cards/rubashka.png'); background-color: #222; transform: rotateY(0deg); }
         .card-front { transform: rotateY(180deg); background-color: #000; }
+        
         .digital-card.flipped .card-inner { transform: rotateY(180deg); }
+        
         .card-label {
-            position: absolute; bottom: -30px; left: 50%; transform: translateX(-50%) rotateY(180deg);
-            color: #ffd700; font-size: 11px; white-space: nowrap; text-shadow: 0 2px 2px #000;
-            background: rgba(0,0,0,0.8); padding: 4px 8px; border-radius: 4px;
-            opacity: 0; transition: opacity 0.5s 0.5s;
+            position: absolute; bottom: -35px; left: 50%; transform: translateX(-50%) rotateY(180deg);
+            color: #ffd700; font-size: 12px; white-space: nowrap; text-shadow: 0 2px 3px #000;
+            background: rgba(0,0,0,0.85); padding: 5px 10px; border-radius: 6px; border: 1px solid #444;
+            opacity: 0; transition: opacity 0.5s 0.6s; pointer-events: none;
         }
         .digital-card.flipped .card-label { opacity: 1; }
 
-        /* === ZOOM === */
+        /* === 6. ZOOM (ЛАЙТБОКС) === */
         #zoom-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.95); z-index: 999;
+            background: rgba(0,0,0,0.96); z-index: 999;
             display: none; opacity: 0; transition: opacity 0.3s;
             flex-direction: column; justify-content: center; align-items: center; pointer-events: auto;
         }
         #zoom-overlay.active { display: flex; opacity: 1; }
+        
         #zoomed-card-img {
-            max-width: 90%; max-height: 80%; border-radius: 10px;
-            box-shadow: 0 0 50px rgba(255, 215, 0, 0.3); border: 2px solid #ffd700;
-            transform: scale(0.9); transition: transform 0.3s;
+            max-width: 90%; max-height: 75%; border-radius: 12px;
+            box-shadow: 0 0 60px rgba(255, 215, 0, 0.2); border: 2px solid #ffd700;
+            transform: scale(0.9); transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
         #zoom-overlay.active #zoomed-card-img { transform: scale(1); }
-        #zoomed-title { margin-top: 20px; color: #ffd700; font-size: 24px; font-weight: bold; letter-spacing: 1px; }
+        
+        #zoomed-title { 
+            margin-top: 25px; color: #ffd700; font-size: 26px; font-weight: bold; 
+            letter-spacing: 2px; text-transform: uppercase; text-align: center;
+        }
+        #zoomed-hint { color: #666; font-size: 12px; margin-top: 5px; }
     </style>
 </head>
 <body>
 
 <div id="app">
-    <div id="loader">Загрузка ИИ...</div>
+    <div id="loader">Загрузка Нейросети...</div>
     
     <div id="video-container">
         <video id="video" playsinline muted autoplay></video>
@@ -144,12 +156,12 @@
 
     <div id="ui-layer">
         <div id="mode-switch-container">
-            <button class="mode-btn active" id="btn-fast" onclick="setMode('fast')">БЫСТРО</button>
+            <button class="mode-btn active" id="btn-fast" onclick="setMode('fast')">LIVE (V2)</button>
             <button class="mode-btn" id="btn-sahi" onclick="setMode('sahi')">SAHI (HD)</button>
         </div>
         
-        <div id="info-bar">Поиск карт...</div>
-        <button id="reset-btn" onclick="resetScanner()">Новый скан</button>
+        <div id="info-bar">Инициализация...</div>
+        <button id="reset-btn" onclick="resetScanner()">Новый расклад</button>
 
         <div id="bottom-bar">
             <div id="action-btn" onclick="handleScanAction()"></div>
@@ -159,30 +171,39 @@
     <div id="zoom-overlay" onclick="closeZoom()">
         <img id="zoomed-card-img" src="" alt="Zoomed Card">
         <div id="zoomed-title"></div>
+        <div id="zoomed-hint">Нажми, чтобы закрыть</div>
     </div>
 </div>
 
 <script>
-    // === КОНФИГУРАЦИЯ ===
+    // ==========================================
+    // 1. КОНФИГУРАЦИЯ СИСТЕМЫ
+    // ==========================================
     const CONFIG = {
-        model: './rider_gold_800.onnx',
-        size: 800,
-        conf: 0.30,
-        iou: 0.45,
-        repo: "./cards/",
-        liveInterval: 300, // Частота живого превью
-        sahiOverlap: 0.25  // Нахлест для SAHI
+        model: './rider_v2_800.onnx',  // <--- ТВОЯ НОВАЯ МОДЕЛЬ (ПЕРЕИМЕНУЙ ФАЙЛ!)
+        size: 800,                     // Размер входа модели
+        conf: 0.35,                    // Порог уверенности (поднял до 0.35, т.к. модель точная)
+        iou: 0.45,                     // Порог наложения рамок
+        repo: "./cards/",              // Папка с картами
+        liveInterval: 300,             // Обновление превью (мс)
+        sahiOverlap: 0.20              // Нахлест для режима SAHI
     };
 
+    // Файлы картинок (Англ)
     const FILE_NAMES=["00-TheFool.jpg","01-TheMagician.jpg","02-TheHighPriestess.jpg","03-TheEmpress.jpg","04-TheEmperor.jpg","05-TheHierophant.jpg","06-TheLovers.jpg","07-TheChariot.jpg","08-Strength.jpg","09-TheHermit.jpg","10-WheelOfFortune.jpg","11-Justice.jpg","12-TheHangedMan.jpg","13-Death.jpg","14-Temperance.jpg","15-TheDevil.jpg","16-TheTower.jpg","17-TheStar.jpg","18-TheMoon.jpg","19-TheSun.jpg","20-Judgement.jpg","21-TheWorld.jpg","Wands01.jpg","Wands02.jpg","Wands03.jpg","Wands04.jpg","Wands05.jpg","Wands06.jpg","Wands07.jpg","Wands08.jpg","Wands09.jpg","Wands10.jpg","Wands11.jpg","Wands12.jpg","Wands13.jpg","Wands14.jpg","Cups01.jpg","Cups02.jpg","Cups03.jpg","Cups04.jpg","Cups05.jpg","Cups06.jpg","Cups07.jpg","Cups08.jpg","Cups09.jpg","Cups10.jpg","Cups11.jpg","Cups12.jpg","Cups13.jpg","Cups14.jpg","Swords01.jpg","Swords02.jpg","Swords03.jpg","Swords04.jpg","Swords05.jpg","Swords06.jpg","Swords07.jpg","Swords08.jpg","Swords09.jpg","Swords10.jpg","Swords11.jpg","Swords12.jpg","Swords13.jpg","Swords14.jpg","Pentacles01.jpg","Pentacles02.jpg","Pentacles03.jpg","Pentacles04.jpg","Pentacles05.jpg","Pentacles06.jpg","Pentacles07.jpg","Pentacles08.jpg","Pentacles09.jpg","Pentacles10.jpg","Pentacles11.jpg","Pentacles12.jpg","Pentacles13.jpg","Pentacles14.jpg"];
+    
+    // Названия для отображения (Ру)
     const RU_NAMES=["Шут","Маг","Жрица","Императрица","Император","Жрец","Влюбленные","Колесница","Сила","Отшельник","Колесо Фортуны","Справедливость","Повешенный","Смерть","Умеренность","Дьявол","Башня","Звезда","Луна","Солнце","Суд","Мир","Туз Жезлов","2 Жезлов","3 Жезлов","4 Жезлов","5 Жезлов","6 Жезлов","7 Жезлов","8 Жезлов","9 Жезлов","10 Жезлов","Паж Жезлов","Рыцарь Жезлов","Королева Жезлов","Король Жезлов","Туз Кубков","2 Кубков","3 Кубков","4 Кубков","5 Кубков","6 Кубков","7 Кубков","8 Кубков","9 Кубков","10 Кубков","Паж Кубков","Рыцарь Кубков","Королева Кубков","Король Кубков","Туз Мечей","2 Мечей","3 Мечей","4 Мечей","5 Мечей","6 Мечей","7 Мечей","8 Мечей","9 Мечей","10 Мечей","Паж Мечей","Рыцарь Мечей","Королева Мечей","Король Мечей","Туз Пентаклей","2 Пентаклей","3 Пентаклей","4 Пентаклей","5 Пентаклей","6 Пентаклей","7 Пентаклей","8 Пентаклей","9 Пентаклей","10 Пентаклей","Паж Пентаклей","Рыцарь Пентаклей","Королева Пентаклей","Король Пентаклей"];
 
+    // ==========================================
+    // 2. ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
+    // ==========================================
     let session;
     let isLiveMode = false;
-    let currentMode = 'fast'; // 'fast' or 'sahi'
+    let currentMode = 'fast'; // 'fast' | 'sahi'
     let lastDetectionTime = 0;
     
-    // Elements
+    // UI Elements
     const video = document.getElementById('video');
     const videoContainer = document.getElementById('video-container');
     const previewCanvas = document.getElementById('preview-canvas');
@@ -196,17 +217,23 @@
     const zoomedImg = document.getElementById('zoomed-card-img');
     const zoomedTitle = document.getElementById('zoomed-title');
     
-    // Canvas for NN
+    // Offscreen Canvas for NN
     const tensorCanvas = document.createElement('canvas');
     tensorCanvas.width = CONFIG.size; tensorCanvas.height = CONFIG.size;
     const tensorCtx = tensorCanvas.getContext('2d', {willReadFrequently: true});
 
-    // === ИНИЦИАЛИЗАЦИЯ ===
+    // ==========================================
+    // 3. ИНИЦИАЛИЗАЦИЯ
+    // ==========================================
     async function init() {
         try {
+            // Путь к WASM файлам ONNX Runtime (CDN)
             ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/";
+            
+            // Загрузка модели
             session = await ort.InferenceSession.create(CONFIG.model, { executionProviders: ['wasm'] });
             
+            // Доступ к камере
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } 
             });
@@ -217,26 +244,34 @@
                 loader.style.display = 'none';
                 startLiveMode();
             };
-        } catch(e) { loader.innerText = "Ошибка: " + e.message; }
+        } catch(e) { 
+            loader.innerText = "Ошибка: " + e.message + "\nПроверь имя модели!";
+            console.error(e);
+        }
     }
     window.onload = init;
     window.addEventListener('resize', resizePreviewCanvas);
     function resizePreviewCanvas() { previewCanvas.width = window.innerWidth; previewCanvas.height = window.innerHeight; }
 
-    // === УПРАВЛЕНИЕ РЕЖИМАМИ ===
+    // ==========================================
+    // 4. УПРАВЛЕНИЕ РЕЖИМАМИ
+    // ==========================================
     function setMode(mode) {
         currentMode = mode;
+        // Обновляем кнопки
         document.getElementById('btn-fast').className = mode === 'fast' ? 'mode-btn active' : 'mode-btn';
         document.getElementById('btn-sahi').className = mode === 'sahi' ? 'mode-btn active' : 'mode-btn';
         
-        // Меняем цвет кнопки действия
+        // Визуальный стиль главной кнопки
         if (mode === 'sahi') actionBtn.classList.add('sahi-style');
         else actionBtn.classList.remove('sahi-style');
+        
+        infoBar.innerText = mode === 'fast' ? 'Режим: LIVE (Быстро)' : 'Режим: SAHI (Детально)';
     }
 
     function startLiveMode() {
         isLiveMode = true;
-        infoBar.innerText = "Наведи камеру и нажми";
+        infoBar.innerText = "Наведи камеру и нажми кнопку";
         actionBtn.style.display = 'flex';
         resetBtn.style.display = 'none';
         videoContainer.style.opacity = 1;
@@ -245,18 +280,24 @@
         requestAnimationFrame(liveLoop);
     }
 
-    // === ЖИВОЕ ПРЕВЬЮ (ОБЩЕЕ ДЛЯ ВСЕХ) ===
+    // ==========================================
+    // 5. ЖИВОЕ ПРЕВЬЮ (LIVE LOOP)
+    // ==========================================
     async function liveLoop() {
         if (!isLiveMode) return;
         const now = Date.now();
+        // Ограничиваем частоту кадров ИИ, чтобы телефон не грелся
         if (now - lastDetectionTime > CONFIG.liveInterval) {
             lastDetectionTime = now;
             try {
-                // Превью всегда "быстрое", чтобы не лагало
+                // Для превью ВСЕГДА используем быстрый режим (весь кадр)
                 const { boxes, scaleInfo } = await runSingleInference(0, 0, video.videoWidth, video.videoHeight);
                 drawLiveOverlay(boxes, scaleInfo);
-                infoBar.innerText = `В кадре: ${boxes.length}`;
-            } catch (e) {}
+                
+                if (boxes.length > 0) infoBar.innerText = `В кадре карт: ${boxes.length}`;
+                else infoBar.innerText = "Поиск карт...";
+                
+            } catch (e) { console.error(e); }
         }
         requestAnimationFrame(liveLoop);
     }
@@ -265,7 +306,8 @@
         previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
         if (boxes.length === 0) return;
         
-        previewCtx.lineWidth = 2;
+        previewCtx.lineWidth = 3;
+        // Цвет рамок меняется в зависимости от режима
         if (currentMode === 'sahi') previewCtx.strokeStyle = "rgba(0, 255, 234, 0.7)";
         else previewCtx.strokeStyle = "rgba(255, 215, 0, 0.7)";
 
@@ -275,47 +317,53 @@
         });
     }
 
-    // === ОБРАБОТЧИК НАЖАТИЯ ===
+    // ==========================================
+    // 6. ОБРАБОТЧИК НАЖАТИЯ (ГЛАВНОЕ ДЕЙСТВИЕ)
+    // ==========================================
     function handleScanAction() {
         if (currentMode === 'sahi') performSAHIScan();
         else performFastScan();
     }
 
-    // --- 1. FAST SCAN ---
+    // --- Вариант А: Быстрый скан (LIVE) ---
     async function performFastScan() {
         if (!isLiveMode) return;
-        isLiveMode = false;
-        loader.innerText = "ОЦИФРОВКА...";
+        isLiveMode = false; // Стоп превью
+        
+        loader.innerText = "ОЦИФРОВКА V2...";
         loader.style.display = 'block';
         actionBtn.style.display = 'none';
         previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
 
         try {
-            // Финальный скан в полном разрешении
-            const { boxes, scaleInfo } = await runSingleInference(0, 0, video.videoWidth, video.videoHeight);
+            // Делаем финальный прогон на полном разрешении
+            const { boxes } = await runSingleInference(0, 0, video.videoWidth, video.videoHeight);
             finishScan(boxes, video.videoWidth, video.videoHeight);
         } catch (e) {
             console.error(e);
-            alert("Ошибка");
+            alert("Ошибка распознавания");
             resetScanner();
         }
     }
 
-    // --- 2. SAHI SCAN ---
+    // --- Вариант Б: Детальный скан (SAHI) ---
     async function performSAHIScan() {
         if (!isLiveMode) return;
         isLiveMode = false;
-        loader.innerText = "SAHI: НАРЕЗКА 2x2...";
+        
+        loader.innerText = "HD SCAN (SAHI 2x2)...";
         loader.style.display = 'block';
         actionBtn.style.display = 'none';
         previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
 
-        // Даем UI обновиться
+        // Используем setTimeout, чтобы UI успел обновиться перед тяжелой работой
         setTimeout(async () => {
             try {
                 const vW = video.videoWidth;
                 const vH = video.videoHeight;
                 const overlap = CONFIG.sahiOverlap;
+                
+                // Нарезка на 4 части с нахлестом
                 const sliceW = vW * (0.5 + overlap/2); 
                 const sliceH = vH * (0.5 + overlap/2);
                 
@@ -329,11 +377,11 @@
                 let allBoxes = [];
 
                 for (let i = 0; i < slices.length; i++) {
-                    loader.innerText = `SAHI: СЕКТОР ${i+1}/4...`;
+                    loader.innerText = `Анализ сектора ${i+1}/4...`;
                     const slice = slices[i];
                     const { boxes } = await runSingleInference(slice.x, slice.y, sliceW, sliceH);
                     
-                    // Пересчет координат в глобальные
+                    // Пересчет локальных координат в глобальные
                     const scaleBack = Math.min(CONFIG.size/sliceW, CONFIG.size/sliceH);
                     const tx = (CONFIG.size - sliceW*scaleBack)/2;
                     const ty = (CONFIG.size - sliceH*scaleBack)/2;
@@ -349,8 +397,8 @@
                     });
                 }
 
-                loader.innerText = "СБОРКА...";
-                const finalBoxes = globalNMS(allBoxes);
+                loader.innerText = "Сборка панорамы...";
+                const finalBoxes = globalNMS(allBoxes); // Убираем дубликаты на стыках
                 finishScan(finalBoxes, vW, vH);
 
             } catch(e) {
@@ -361,49 +409,90 @@
         }, 50);
     }
 
-    // === ФИНАЛИЗАЦИЯ (ОБЩАЯ) ===
+    // ==========================================
+    // 7. ФИНАЛИЗАЦИЯ (ОТОБРАЖЕНИЕ)
+    // ==========================================
     function finishScan(boxes, vW, vH) {
         loader.style.display = 'none';
         if (boxes.length === 0) {
-            alert("Карты не найдены.");
+            alert("Карты не найдены. Попробуйте изменить угол.");
             resetScanner(); return;
         }
 
+        // Прячем камеру, показываем стол
         videoContainer.style.opacity = 0;
         table.style.display = 'block';
-        document.getElementById('mode-switch-container').style.display = 'none'; // Скрываем свич
+        document.getElementById('mode-switch-container').style.display = 'none'; 
         resetBtn.style.display = 'block';
-        infoBar.innerText = `Найдено: ${boxes.length}`;
+        infoBar.innerText = `Распознано: ${boxes.length} карт`;
 
         renderVirtualCards(boxes, vW, vH);
     }
 
-    // === ИНФЕРЕНС И УТИЛИТЫ ===
+    // ==========================================
+    // 8. ИИ ЯДРО (INFERENCE CORE)
+    // ==========================================
     async function runSingleInference(sx, sy, sw, sh) {
+        // Подготовка картинки (Letterbox resize)
         const scale = Math.min(CONFIG.size/sw, CONFIG.size/sh);
         const tx = (CONFIG.size - sw*scale)/2;
         const ty = (CONFIG.size - sh*scale)/2;
 
         tensorCtx.fillStyle = "#000"; tensorCtx.fillRect(0,0,CONFIG.size,CONFIG.size);
+        // Вырезаем кусок видео (sx,sy,sw,sh) и рисуем в тензор (tx,ty)
         tensorCtx.drawImage(video, sx, sy, sw, sh, tx, ty, sw*scale, sh*scale);
 
+        // Конвертация пикселей в тензор
         const imgData = tensorCtx.getImageData(0,0,CONFIG.size,CONFIG.size).data;
         const float32 = new Float32Array(3*CONFIG.size*CONFIG.size);
         for(let i=0; i<CONFIG.size**2; i++) {
-            float32[i] = imgData[i*4]/255.0; 
-            float32[CONFIG.size**2+i] = imgData[i*4+1]/255.0; 
-            float32[2*CONFIG.size**2+i] = imgData[i*4+2]/255.0;
+            float32[i] = imgData[i*4]/255.0; // Red
+            float32[CONFIG.size**2+i] = imgData[i*4+1]/255.0; // Green
+            float32[2*CONFIG.size**2+i] = imgData[i*4+2]/255.0; // Blue
         }
         const tensor = new ort.Tensor('float32', float32, [1, 3, CONFIG.size, CONFIG.size]);
+        
+        // Запуск модели
         const res = await session.run({[session.inputNames[0]]: tensor});
+        
+        // Парсинг результата (YOLOv8 Output)
         const boxes = nms(parseYOLOv8(res[session.outputNames[0]]));
 
         return { boxes, scaleInfo: { tx, ty, scaleModel: scale, vW: sw, vH: sh } };
     }
 
+    // Парсер выхода YOLOv8 [1, 84, 8400]
+    function parseYOLOv8(output) {
+        const dims = output.dims; const data = output.data;
+        const numAnchors = dims[2]; const numClasses = dims[1] - 4;
+        const boxes = [];
+        for (let i = 0; i < numAnchors; i++) {
+            let maxScore = 0; let cls = -1;
+            // Ищем класс с максимальной вероятностью
+            for (let c = 0; c < numClasses; c++) {
+                const val = data[(c+4)*numAnchors + i];
+                if (val > maxScore) { maxScore = val; cls = c; }
+            }
+            if (maxScore > CONFIG.conf) {
+                boxes.push({ 
+                    x: data[0*numAnchors+i], y: data[1*numAnchors+i], 
+                    w: data[2*numAnchors+i], h: data[3*numAnchors+i], 
+                    score: maxScore, cls: cls 
+                });
+            }
+        }
+        return boxes;
+    }
+
+    // ==========================================
+    // 9. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (MATH & UI)
+    // ==========================================
+    
+    // Рендер 3D карт на столе
     function renderVirtualCards(boxes, vW, vH) {
         table.innerHTML = '';
         const screenW = window.innerWidth, screenH = window.innerHeight;
+        // Масштабируем стол под экран (Cover)
         const scaleScreen = Math.max(screenW / vW, screenH / vH);
         const offsetX = (screenW - vW * scaleScreen) / 2;
         const offsetY = (screenH - vH * scaleScreen) / 2;
@@ -423,7 +512,9 @@
             container.style.height = `${finalH}px`;
             container.style.left = `${finalX - finalW/2}px`;
             container.style.top = `${finalY - finalH/2}px`;
+            container.style.zIndex = index + 10; // Сохраняем порядок слоев
 
+            // Клик для зума
             container.onclick = () => { showZoom(cardImgUrl, cardName); };
 
             const inner = document.createElement('div'); inner.className = 'card-inner';
@@ -438,17 +529,23 @@
             inner.appendChild(front); inner.appendChild(back);
             container.appendChild(inner); table.appendChild(container);
 
-            setTimeout(() => { container.classList.add('flipped'); }, 500 + (index * 150));
+            // Анимация переворота
+            setTimeout(() => { container.classList.add('flipped'); }, 300 + (index * 100));
         });
     }
 
+    // Перевод координат из модели (800x800) в экран
     function transformCoordinates(box, tx, ty, scaleModel, vW, vH) {
         const screenW = window.innerWidth, screenH = window.innerHeight;
         const scaleScreen = Math.max(screenW / vW, screenH / vH);
         const offsetX = (screenW - vW * scaleScreen) / 2;
         const offsetY = (screenH - vH * scaleScreen) / 2;
+        
+        // 1. Из модели в оригинальное видео
         const realX = (box.x - tx) / scaleModel;
         const realY = (box.y - ty) / scaleModel;
+        
+        // 2. Из видео в экран
         return {
             x: offsetX + realX * scaleScreen,
             y: offsetY + realY * scaleScreen,
@@ -457,6 +554,7 @@
         };
     }
 
+    // Non-Maximum Suppression (Удаление дублей)
     function globalNMS(boxes) {
         if (!boxes.length) return [];
         boxes.sort((a,b) => b.score - a.score);
@@ -473,28 +571,13 @@
         }
         return res;
     }
+    function nms(boxes) { return globalNMS(boxes); }
 
+    // Зум
     function showZoom(imgSrc, title) { zoomedImg.src = imgSrc; zoomedTitle.innerText = title; zoomOverlay.classList.add('active'); }
     function closeZoom() { zoomOverlay.classList.remove('active'); }
     function resetScanner() { closeZoom(); startLiveMode(); }
 
-    function parseYOLOv8(output) {
-        const dims = output.dims; const data = output.data;
-        const numAnchors = dims[2]; const numClasses = dims[1] - 4;
-        const boxes = [];
-        for (let i = 0; i < numAnchors; i++) {
-            let maxScore = 0; let cls = -1;
-            for (let c = 0; c < numClasses; c++) {
-                const val = data[(c+4)*numAnchors + i];
-                if (val > maxScore) { maxScore = val; cls = c; }
-            }
-            if (maxScore > CONFIG.conf) {
-                boxes.push({ x: data[0*numAnchors+i], y: data[1*numAnchors+i], w: data[2*numAnchors+i], h: data[3*numAnchors+i], score: maxScore, cls: cls });
-            }
-        }
-        return boxes;
-    }
-    function nms(boxes) { return globalNMS(boxes); }
 </script>
 </body>
 </html>
