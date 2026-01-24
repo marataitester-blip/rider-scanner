@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>RIDER: V2 PRO SCANNER</title>
+    <title>RIDER: V3 PRO SCANNER</title>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
     <style>
         /* === 1. БАЗОВЫЙ СТИЛЬ === */
@@ -85,7 +85,7 @@
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             color: #ffd700; background: rgba(0,0,0,0.9); padding: 20px 40px; border-radius: 15px;
             border: 1px solid #ffd700; z-index: 30; font-size: 16px; display: block;
-            pointer-events: auto; text-align: center; box-shadow: 0 0 30px rgba(0,0,0,0.8);
+            pointer-events: auto; text-align: center; box-shadow: 0 0 30px rgba(0,0,0,0.8); white-space: pre-line;
         }
 
         /* === 3D КАРТЫ === */
@@ -142,7 +142,7 @@
 <body>
 
 <div id="app">
-    <div id="loader">Загрузка модели (40MB)...</div>
+    <div id="loader">Подключение к Нейросети...<br>Загрузка model_v3.onnx...</div>
     
     <div id="video-container">
         <video id="video" playsinline muted autoplay></video>
@@ -153,7 +153,7 @@
 
     <div id="ui-layer">
         <div id="mode-switch-container">
-            <button class="mode-btn active" id="btn-fast" onclick="setMode('fast')">LIVE (V2)</button>
+            <button class="mode-btn active" id="btn-fast" onclick="setMode('fast')">LIVE (V3)</button>
             <button class="mode-btn" id="btn-sahi" onclick="setMode('sahi')">SAHI (HD)</button>
         </div>
         
@@ -177,7 +177,7 @@
     // 1. КОНФИГУРАЦИЯ СИСТЕМЫ
     // ==========================================
     const CONFIG = {
-        model: './sv2800.onnx',       // <--- НОВОЕ ИМЯ ФАЙЛА
+        model: './model_v3.onnx',      // <--- ИМЯ ФАЙЛА СИНХРОНИЗИРОВАНО
         size: 800,                     // Размер входа модели
         conf: 0.35,                    // Порог уверенности
         iou: 0.45,                     // Порог наложения
@@ -228,8 +228,15 @@
                 startLiveMode();
             };
         } catch(e) { 
-            loader.innerText = "Ошибка загрузки: " + e.message;
             console.error(e);
+            // Если ошибка числовая - это WASM Panic (обычно 404 на бинарнике)
+            if (typeof e === 'number' || e.message?.includes('status')) {
+                loader.innerText = "⛔ ОШИБКА 404: Файл model_v3.onnx не найден на сервере.\nПожалуйста, убедитесь, что вы сделали Push в GitHub!";
+                loader.style.color = "#ff4444";
+                loader.style.borderColor = "#ff4444";
+            } else {
+                loader.innerText = "Ошибка запуска: " + (e.message || e);
+            }
         }
     }
     window.onload = init;
@@ -292,6 +299,7 @@
         if (!isLiveMode) return;
         isLiveMode = false;
         loader.innerText = "ОЦИФРОВКА...";
+        loader.style.color = "#ffd700"; loader.style.borderColor = "#ffd700";
         loader.style.display = 'block';
         actionBtn.style.display = 'none';
         previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
@@ -307,6 +315,7 @@
         if (!isLiveMode) return;
         isLiveMode = false;
         loader.innerText = "HD SCAN (SAHI)...";
+        loader.style.color = "#ffd700"; loader.style.borderColor = "#ffd700";
         loader.style.display = 'block';
         actionBtn.style.display = 'none';
         previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
