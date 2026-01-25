@@ -3,76 +3,51 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TAROT PRO: DIAGNOSTIC</title>
+    <title>TAROT AI: CDN EDITION</title>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
     <style>
-        /* === NEON STYLE === */
-        body { margin: 0; background: #050505; overflow: hidden; font-family: 'Courier New', monospace; user-select: none; }
+        /* === СТИЛЬ === */
+        body { margin: 0; background: #000; overflow: hidden; font-family: monospace; user-select: none; }
         #app { position: relative; width: 100vw; height: 100vh; }
-        
         #video-container { position: absolute; width: 100%; height: 100%; z-index: 1; background: #000; }
         video { width: 100%; height: 100%; object-fit: cover; opacity: 0.6; }
         #preview-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-
         #virtual-table { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; display: none; background: rgba(0,0,0,0.9); perspective: 1000px; }
-
         #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 20; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: space-between; }
-        
         #scan-btn { width: 90px; height: 90px; border-radius: 50%; border: 4px solid #00ffea; background: rgba(0,255,234,0.2); margin-bottom: 50px; pointer-events: auto; cursor: pointer; display: flex; justify-content: center; align-items: center; box-shadow: 0 0 30px #00ffea; backdrop-filter: blur(5px); }
-        #scan-btn:active { transform: scale(0.95); background: rgba(0,255,234,0.5); }
-        
         #reset-btn { display: none; margin-top: 20px; padding: 10px 30px; border: 2px solid #ffd700; color: #ffd700; background: #000; border-radius: 20px; pointer-events: auto; font-weight: bold; cursor: pointer; }
-
-        #loader { 
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-            color: #00ffea; border: 1px solid #00ffea; padding: 25px; 
-            background: rgba(0,0,0,0.95); z-index: 100; text-align: center; 
-            border-radius: 10px; white-space: pre-line; font-weight: bold;
-            box-shadow: 0 0 50px rgba(0,0,0,0.8);
-        }
-        
-        /* 3D Карты */
+        #loader { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #00ffea; border: 1px solid #00ffea; padding: 25px; background: rgba(0,0,0,0.95); z-index: 100; text-align: center; border-radius: 10px; white-space: pre-line; font-weight: bold; box-shadow: 0 0 50px rgba(0,0,0,0.8); }
         .digital-card { position: absolute; transform-style: preserve-3d; transition: 0.6s; cursor: zoom-in; }
         .card-inner { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; transition: transform 0.8s; }
         .front, .back { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; border-radius: 6px; background-size: cover; border: 1px solid #666; }
         .back { background-image: url('./cards/rubashka.png'); background-color: #222; transform: rotateY(0deg); }
         .front { transform: rotateY(180deg); background-color: #000; }
         .digital-card.flipped .card-inner { transform: rotateY(180deg); }
-
         #zoom { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 200; display: none; flex-direction: column; align-items: center; justify-content: center; pointer-events: auto; }
         #zoom img { max-width: 90%; max-height: 70%; border: 2px solid #ffd700; }
     </style>
 </head>
 <body>
-
 <div id="app">
-    <div id="loader">ПРОВЕРКА ФАЙЛОВ...<br>Ищу best.onnx</div>
-
-    <div id="video-container">
-        <video id="video" playsinline muted autoplay></video>
-        <canvas id="preview-canvas"></canvas>
-    </div>
-
+    <div id="loader">ПОДКЛЮЧЕНИЕ К CDN...<br>Скачиваю best.onnx</div>
+    <div id="video-container"><video id="video" playsinline muted autoplay></video><canvas id="preview-canvas"></canvas></div>
     <div id="virtual-table"></div>
-
     <div id="ui">
-        <div style="margin-top:20px; color:#00ffea;">TAROT AI V3</div>
+        <div style="margin-top:20px; color:#00ffea;">TAROT AI V3 (CDN)</div>
         <button id="reset-btn" onclick="reset()">НОВЫЙ СКАН</button>
         <div style="flex-grow:1"></div>
         <div id="scan-btn" onclick="scan()"></div>
     </div>
-    
     <div id="zoom" onclick="this.style.display='none'"><img id="z-img"></div>
 </div>
 
 <script>
-    // === КОНФИГУРАЦИЯ ===
     const CONFIG = {
-        model: './best.onnx',  // <--- Имя файла модели
-        size: 800, 
-        conf: 0.35, 
-        iou: 0.45, 
-        cards: './cards/' 
+        // === ПРЯМАЯ ССЫЛКА НА ТВОЙ ФАЙЛ В GITHUB ===
+        // Если твой файл называется иначе, поменяй best.onnx на нужное имя
+        model: 'https://cdn.jsdelivr.net/gh/marataitester-blip/rider-scanner@main/best.onnx',
+        
+        size: 800, conf: 0.35, iou: 0.45, cards: './cards/' 
     };
 
     const CARDS_EN=["00-TheFool","01-TheMagician","02-TheHighPriestess","03-TheEmpress","04-TheEmperor","05-TheHierophant","06-TheLovers","07-TheChariot","08-Strength","09-TheHermit","10-WheelOfFortune","11-Justice","12-TheHangedMan","13-Death","14-Temperance","15-TheDevil","16-TheTower","17-TheStar","18-TheMoon","19-TheSun","20-Judgement","21-TheWorld","Wands01","Wands02","Wands03","Wands04","Wands05","Wands06","Wands07","Wands08","Wands09","Wands10","Wands11","Wands12","Wands13","Wands14","Cups01","Cups02","Cups03","Cups04","Cups05","Cups06","Cups07","Cups08","Cups09","Cups10","Cups11","Cups12","Cups13","Cups14","Swords01","Swords02","Swords03","Swords04","Swords05","Swords06","Swords07","Swords08","Swords09","Swords10","Swords11","Swords12","Swords13","Swords14","Pentacles01","Pentacles02","Pentacles03","Pentacles04","Pentacles05","Pentacles06","Pentacles07","Pentacles08","Pentacles09","Pentacles10","Pentacles11","Pentacles12","Pentacles13","Pentacles14"];
@@ -81,30 +56,18 @@
     let session, video, canvas, ctx, isBusy = false;
     const loader = document.getElementById('loader');
 
-    // === ГЛАВНАЯ ФУНКЦИЯ СТАРТА ===
     async function init() {
         try {
-            // 1. ДИАГНОСТИКА: Проверяем файл ПЕРЕД загрузкой в ядро
-            loader.innerText = "ПРОВЕРКА ФАЙЛА...\n" + CONFIG.model;
-            
-            const response = await fetch(CONFIG.model, { method: 'HEAD' });
-            
-            if (!response.ok) {
-                if (response.status === 404) throw new Error(`Файл ${CONFIG.model} не найден (404).\nПроверь имя файла в GitHub!`);
-                else throw new Error(`Ошибка сервера: ${response.status}`);
-            }
-
-            const size = response.headers.get('content-length');
-            if (size && size < 1000000) { // Если меньше 1 Мб
-                throw new Error(`Файл слишком маленький (${Math.round(size/1024)} KB).\nСкорее всего это не модель, а ссылка Git LFS.`);
-            }
-
-            // 2. ЗАГРУЗКА ЯДРА
-            loader.innerText = "ЗАГРУЗКА ЯДРА AI...\nЭто займет пару секунд";
             ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/";
+            
+            // 1. Проверка URL
+            loader.innerText = "СКАЧИВАНИЕ МОДЕЛИ...\n" + CONFIG.model.split('/').pop();
+            const response = await fetch(CONFIG.model, { method: 'HEAD' });
+            if (!response.ok) throw new Error(`Файл не найден (HTTP ${response.status}) по ссылке CDN.`);
+            
+            // 2. Инициализация
             session = await ort.InferenceSession.create(CONFIG.model, { executionProviders: ['wasm'] });
             
-            // 3. КАМЕРА
             video = document.getElementById('video');
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 video: { facingMode: 'environment', width: { ideal: 1920 } } 
@@ -112,33 +75,22 @@
             video.srcObject = stream;
             video.onloadedmetadata = () => { 
                 video.play(); 
-                canvas = document.getElementById('preview-canvas');
-                ctx = canvas.getContext('2d');
-                canvas.width = window.innerWidth; 
-                canvas.height = window.innerHeight;
-                loader.style.display = 'none'; 
-                loop(); 
+                canvas = document.getElementById('preview-canvas'); ctx = canvas.getContext('2d');
+                canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+                loader.style.display = 'none'; loop(); 
             };
-
         } catch(e) {
             console.error(e);
-            loader.style.borderColor = "#ff0000";
-            loader.style.color = "#ff0000";
-            
-            // Расшифровка ошибки "undefined" (числовой код)
-            if (typeof e === 'number' || e.message?.includes('status')) {
-                loader.innerText = "⛔ КРИТИЧЕСКАЯ ОШИБКА:\nФайл модели поврежден или недоступен.\nПопробуй загрузить его заново.";
-            } else {
-                loader.innerText = "ОШИБКА:\n" + e.message;
-            }
+            loader.style.borderColor = "#ff0000"; loader.style.color = "#ff0000";
+            if (typeof e === 'number' || e.message?.includes('status')) loader.innerText = "ОШИБКА CDN:\nФайл поврежден или ссылка неверна.";
+            else loader.innerText = "ОШИБКА:\n" + e.message;
         }
     }
     window.onload = init;
 
-    // === ПРЕВЬЮ ===
     async function loop() {
         if(!session || isBusy) { requestAnimationFrame(loop); return; }
-        if(Date.now() % 300 < 20) { // 3 FPS превью
+        if(Date.now() % 300 < 20) {
             try {
                 const {boxes} = await runAI(0,0,video.videoWidth,video.videoHeight);
                 drawBoxes(boxes);
@@ -147,51 +99,38 @@
         requestAnimationFrame(loop);
     }
 
-    // === СКАНИРОВАНИЕ (SAHI) ===
     async function scan() {
         if(isBusy) return; isBusy = true;
-        document.getElementById('scan-btn').style.display='none'; 
-        loader.style.display='block'; loader.innerText="УМНОЕ СКАНИРОВАНИЕ...";
-        
+        document.getElementById('scan-btn').style.display='none'; loader.style.display='block'; loader.innerText="СКАНИРУЮ...";
         try {
             const vw = video.videoWidth, vh = video.videoHeight;
             const global = await runAI(0,0,vw,vh);
             let all = [...global.boxes];
-
             const sw = vw*0.6, sh = vh*0.6;
             const secs = [{x:0,y:0},{x:vw-sw,y:0},{x:0,y:vh-sh},{x:vw-sw,y:vh-sh}];
-            
             for(let s of secs) {
                 const res = await runAI(s.x, s.y, sw, sh);
                 res.boxes.forEach(b => all.push({x:b.x+s.x, y:b.y+s.y, w:b.w, h:b.h, cls:b.cls, score:b.score}));
             }
-            
             showResult(nms(all));
-        } catch(e) { alert("Ошибка сканирования"); reset(); }
+        } catch(e) { alert("Ошибка"); reset(); }
     }
 
     async function runAI(sx,sy,sw,sh) {
-        const tensorCanvas = document.createElement('canvas'); 
-        tensorCanvas.width=CONFIG.size; tensorCanvas.height=CONFIG.size;
+        const tensorCanvas = document.createElement('canvas'); tensorCanvas.width=CONFIG.size; tensorCanvas.height=CONFIG.size;
         const tCtx = tensorCanvas.getContext('2d');
         const scale = Math.min(CONFIG.size/sw, CONFIG.size/sh);
         const tx = (CONFIG.size-sw*scale)/2, ty = (CONFIG.size-sh*scale)/2;
-        
         tCtx.fillStyle="#000"; tCtx.fillRect(0,0,CONFIG.size,CONFIG.size);
         tCtx.drawImage(video, sx,sy,sw,sh, tx,ty,sw*scale,sh*scale);
-        
         const data = tCtx.getImageData(0,0,CONFIG.size,CONFIG.size).data;
         const input = new Float32Array(3*CONFIG.size*CONFIG.size);
         for(let i=0; i<CONFIG.size**2; i++) {
-            input[i] = data[i*4]/255.0; 
-            input[CONFIG.size**2+i] = data[i*4+1]/255.0; 
-            input[2*CONFIG.size**2+i] = data[i*4+2]/255.0;
+            input[i] = data[i*4]/255.0; input[CONFIG.size**2+i] = data[i*4+1]/255.0; input[2*CONFIG.size**2+i] = data[i*4+2]/255.0;
         }
-        
         const res = await session.run({[session.inputNames[0]]: new ort.Tensor('float32', input, [1,3,CONFIG.size,CONFIG.size])});
         const output = res[session.outputNames[0]].data;
         const boxes = []; const anchors = res[session.outputNames[0]].dims[2];
-        
         for(let i=0; i<anchors; i++) {
             let max=0, cls=-1;
             for(let c=0; c<80; c++) if(output[(c+4)*anchors+i]>max) { max=output[(c+4)*anchors+i]; cls=c; }
@@ -229,18 +168,13 @@
         const tbl = document.getElementById('virtual-table'); tbl.style.display='block'; tbl.innerHTML='';
         document.getElementById('ui').style.pointerEvents='none'; 
         document.getElementById('reset-btn').style.display='block'; document.getElementById('reset-btn').style.pointerEvents='auto';
-        
         const s = Math.max(window.innerWidth/video.videoWidth, window.innerHeight/video.videoHeight);
         const dx = (window.innerWidth-video.videoWidth*s)/2, dy = (window.innerHeight-video.videoHeight*s)/2;
-        
         boxes.forEach((b,i) => {
             const el = document.createElement('div'); el.className='digital-card';
             el.style.width=b.w*s+'px'; el.style.height=b.h*s+'px';
             el.style.left=(b.x*s+dx-b.w*s/2)+'px'; el.style.top=(b.y*s+dy-b.h*s/2)+'px'; el.style.zIndex=i+10;
-            
-            const name = CARDS_RU[b.cls] || "Неизвестно";
             const img = CONFIG.cards + CARDS_EN[b.cls] + ".jpg";
-            
             el.innerHTML = `<div class="card-inner"><div class="back"></div><div class="front" style="background-image:url('${img}')"></div></div>`;
             el.onclick = () => { document.getElementById('z-img').src=img; document.getElementById('zoom').style.display='flex'; };
             tbl.appendChild(el); setTimeout(()=>el.classList.add('flipped'), 100+i*50);
