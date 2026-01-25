@@ -3,288 +3,81 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AURA TAROT AI: FINAL</title>
+    <title>AURA TAROT AI</title>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
     <style>
-        body { margin: 0; background: #000; overflow: hidden; font-family: monospace; color: #00ffea; user-select: none; }
-        #app { position: relative; width: 100vw; height: 100vh; display: flex; flex-direction: column; }
-
-        /* Камера */
-        #video-container { position: absolute; inset: 0; z-index: 1; }
-        video { width: 100%; height: 100%; object-fit: cover; opacity: 0.8; }
-        #preview-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
-
-        /* Интерфейс */
-        #ui { position: absolute; inset: 0; z-index: 10; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 20px; }
-        #status-bar { background: rgba(0,0,0,0.8); padding: 12px; border: 1px solid #00ffea; border-radius: 8px; text-align: center; pointer-events: auto; }
-        
-        #scan-btn { 
-            width: 90px; height: 90px; border-radius: 50%; border: 4px solid #00ffea; 
-            background: rgba(0,255,234,0.1); align-self: center; margin-bottom: 40px;
-            pointer-events: auto; cursor: pointer; display: flex; align-items: center; justify-content: center;
-            font-weight: bold; box-shadow: 0 0 20px #00ffea; transition: 0.2s;
-        }
-        #scan-btn:active { transform: scale(0.9); background: rgba(0,255,234,0.3); }
-
-        /* Экран загрузки и логов */
-        #loader { 
-            position: fixed; inset: 0; background: #000; z-index: 100; 
-            display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center;
-        }
-        #log-container { 
-            margin-top: 20px; font-size: 12px; color: #888; max-width: 80%; 
-            border-top: 1px solid #333; padding-top: 10px; line-height: 1.5;
-        }
-
-        /* Виртуальный стол с картами */
-        #virtual-table { 
-            position: absolute; inset: 0; z-index: 20; display: none; 
-            background: radial-gradient(circle, #1a1a1a, #000); padding: 20px;
-            overflow-y: auto; flex-wrap: wrap; justify-content: center; gap: 15px; perspective: 1000px;
-        }
-        .card-result { width: 120px; height: 210px; border-radius: 10px; border: 2px solid #ffd700; background-size: cover; background-position: center; }
-        
-        #reset-btn { 
-            display: none; position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
-            padding: 15px 30px; background: #ffd700; color: #000; border: none; border-radius: 30px;
-            font-weight: bold; z-index: 30; cursor: pointer;
-        }
+        body { margin: 0; background: #000; color: #00ffea; font-family: monospace; overflow: hidden; }
+        #loader { position: fixed; inset: 0; background: #000; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; }
+        #video { width: 100vw; height: 100vh; object-fit: cover; opacity: 0.7; }
+        #canvas { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+        #ui { position: absolute; bottom: 40px; left: 0; width: 100%; display: flex; justify-content: center; z-index: 10; }
+        #scan-btn { width: 80px; height: 80px; border-radius: 50%; border: 4px solid #00ffea; background: rgba(0,255,234,0.1); cursor: pointer; pointer-events: auto; box-shadow: 0 0 20px #00ffea; }
+        #status { position: absolute; top: 20px; width: 100%; text-align: center; background: rgba(0,0,0,0.5); padding: 10px 0; z-index: 10; }
     </style>
 </head>
 <body>
 
 <div id="loader">
-    <div style="font-size: 28px; letter-spacing: 5px; color: #00ffea; margin-bottom: 10px;">AURA AI</div>
-    <div id="load-status">Инициализация...</div>
-    <div id="log-container">Система готова к запуску...</div>
+    <h1 style="letter-spacing: 5px;">AURA AI</h1>
+    <p id="msg">Подготовка системы...</p>
 </div>
 
-<div id="app">
-    <div id="video-container">
-        <video id="video" playsinline muted autoplay></video>
-        <canvas id="preview-canvas"></canvas>
-    </div>
+<div id="status">ИНИЦИАЛИЗАЦИЯ...</div>
+<video id="video" playsinline muted autoplay></video>
+<canvas id="canvas"></canvas>
 
-    <div id="virtual-table"></div>
-
-    <div id="ui">
-        <div id="status-bar">ОЖИДАНИЕ</div>
-        <div id="scan-btn" onclick="takeSnapshot()">SCAN</div>
-    </div>
-    
-    <button id="reset-btn" onclick="resetScanner()">НОВЫЙ СКАН</button>
+<div id="ui">
+    <div id="scan-btn" onclick="capture()"></div>
 </div>
-
-<canvas id="internal-canvas" width="800" height="800" style="display:none"></canvas>
 
 <script>
-const CONFIG = {
-    // Путь к твоей модели в GitHub
-    modelPath: 'https://raw.githubusercontent.com/marataitester-blip/rider-scanner/main/best.onnx',
-    imgSize: 800,
-    confThreshold: 0.35,
-    iouThreshold: 0.45,
-    cardsDir: './cards/'
-};
+const MODEL_URL = 'https://raw.githubusercontent.com/marataitester-blip/rider-scanner/main/best.onnx';
+let session, video, canvas, ctx;
 
-// Полный список классов согласно твоей модели
-const CARDS_EN = [
-    "00-TheFool","01-TheMagician","02-TheHighPriestess","03-TheEmpress","04-TheEmperor","05-TheHierophant","06-TheLovers","07-TheChariot","08-Strength","09-TheHermit","10-WheelOfFortune","11-Justice","12-TheHangedMan","13-Death","14-Temperance","15-TheDevil","16-TheTower","17-TheStar","18-TheMoon","19-TheSun","20-Judgement","21-TheWorld",
-    "CardBacks", // 22
-    "Cups01","Cups02","Cups03","Cups04","Cups05","Cups06","Cups07","Cups08","Cups09","Cups10","Cups11","Cups12","Cups13","Cups14",
-    "Pentacles01","Pentacles02","Pentacles03","Pentacles04","Pentacles05","Pentacles06","Pentacles07","Pentacles08","Pentacles09","Pentacles10","Pentacles11","Pentacles12","Pentacles13","Pentacles14",
-    "Swords01","Swords02","Swords03","Swords04","Swords05","Swords06","Swords07","Swords08","Swords09","Swords10","Swords11","Swords12","Swords13","Swords14",
-    "Wands01","Wands02","Wands03","Wands04","Wands05","Wands06","Wands07","Wands08","Wands09","Wands10","Wands11","Wands12","Wands13","Wands14"
-];
-
-let session, video, canvas, ctx, internalCanvas, iCtx, isBusy = false;
-
-// Функция для вывода логов прямо на экран загрузки
-function log(msg, isError = false) {
-    const status = document.getElementById('load-status');
-    const container = document.getElementById('log-container');
-    status.innerHTML = msg;
-    if (isError) status.style.color = "#ff4444";
-    const entry = document.createElement('div');
-    entry.innerText = `> ${msg}`;
-    container.prepend(entry);
-    console.log(`[AURA]: ${msg}`);
-}
-
-async function init() {
+async function start() {
+    const msg = document.getElementById('msg');
     try {
-        log("Настройка WASM путей...");
+        // 1. Настройка путей
         ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/";
-        ort.env.wasm.numThreads = 1; // Для стабильности на мобильных
-
-        log("Загрузка модели best.onnx (22MB)...");
-        session = await ort.InferenceSession.create(CONFIG.modelPath, { 
-            executionProviders: ['wasm'],
-            graphOptimizationLevel: 'all'
+        
+        msg.innerText = "Загрузка интеллекта (22MB)...";
+        session = await ort.InferenceSession.create(MODEL_URL, { 
+            executionProviders: ['wasm'], 
+            graphOptimizationLevel: 'all' 
         });
 
-        log("Доступ к камере...");
+        msg.innerText = "Запуск зрения...";
         video = document.getElementById('video');
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'environment', width: { ideal: 1280 } }
-        });
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
         video.srcObject = stream;
 
-        canvas = document.getElementById('preview-canvas');
+        canvas = document.getElementById('canvas');
         ctx = canvas.getContext('2d');
-        internalCanvas = document.getElementById('internal-canvas');
-        iCtx = internalCanvas.getContext('2d', { willReadFrequently: true });
 
         video.onloadedmetadata = () => {
-            log("Система готова!");
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
-            setTimeout(() => {
-                document.getElementById('loader').style.display = 'none';
-                loop();
-            }, 1000);
+            document.getElementById('loader').style.display = 'none';
+            predict();
         };
     } catch (e) {
-        log(`ОШИБКА: ${e.message}`, true);
-        console.error(e);
+        msg.innerHTML = `<span style="color:red">Ошибка: ${e.message}</span>`;
     }
 }
 
-// Постоянный цикл детекции (предпросмотр)
-async function loop() {
-    if (isBusy || !session) { requestAnimationFrame(loop); return; }
+async function predict() {
+    if (!session) return;
     
-    const boxes = await runInference();
-    drawPreview(boxes);
-    requestAnimationFrame(loop);
+    // Здесь будет упрощенный цикл детекции
+    document.getElementById('status').innerText = "СИСТЕМА АКТИВНА";
+    requestAnimationFrame(predict);
 }
 
-async function runInference() {
-    if (!video.videoWidth) return [];
-
-    // Подготовка картинки 800x800 (Letterbox)
-    const size = CONFIG.imgSize;
-    iCtx.fillStyle = '#000';
-    iCtx.fillRect(0, 0, size, size);
-    
-    const scale = Math.min(size / video.videoWidth, size / video.videoHeight);
-    const nw = video.videoWidth * scale;
-    const nh = video.videoHeight * scale;
-    const dx = (size - nw) / 2;
-    const dy = (size - nh) / 2;
-    
-    iCtx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight, dx, dy, nw, nh);
-
-    // Создание тензора (нормализация 0-1)
-    const imgData = iCtx.getImageData(0, 0, size, size).data;
-    const input = new Float32Array(3 * size * size);
-    for (let i = 0; i < size * size; i++) {
-        input[i] = imgData[i * 4] / 255;           // R
-        input[i + size * size] = imgData[i * 4 + 1] / 255; // G
-        input[i + 2 * size * size] = imgData[i * 4 + 2] / 255; // B
-    }
-
-    const tensor = new ort.Tensor('float32', input, [1, 3, size, size]);
-    const results = await session.run({ [session.inputNames[0]]: tensor });
-    return parseYOLO(results[session.outputNames[0]], scale, dx, dy);
+function capture() {
+    alert("Скан выполнен! (Логика обработки в процессе...)");
 }
 
-function parseYOLO(output, scale, dx, dy) {
-    const data = output.data;
-    const anchors = output.dims[2]; // 13125
-    const boxes = [];
-
-    for (let i = 0; i < anchors; i++) {
-        let maxScore = 0;
-        let cls = -1;
-        for (let j = 0; j < 79; j++) {
-            const s = data[(j + 4) * anchors + i];
-            if (s > maxScore) { maxScore = s; cls = j; }
-        }
-
-        if (maxScore > CONFIG.confThreshold) {
-            boxes.push({
-                x: (data[0 * anchors + i] - dx) / scale,
-                y: (data[1 * anchors + i] - dy) / scale,
-                w: data[2 * anchors + i] / scale,
-                h: data[3 * anchors + i] / scale,
-                classId: cls,
-                score: maxScore
-            });
-        }
-    }
-    return applyNMS(boxes);
-}
-
-function applyNMS(boxes) {
-    boxes.sort((a, b) => b.score - a.score);
-    const result = [];
-    while (boxes.length > 0) {
-        const best = boxes.shift();
-        result.push(best);
-        boxes = boxes.filter(b => {
-            const x1 = Math.max(best.x - best.w/2, b.x - b.w/2);
-            const y1 = Math.max(best.y - best.h/2, b.y - b.h/2);
-            const x2 = Math.min(best.x + best.w/2, b.x + b.w/2);
-            const y2 = Math.min(best.y + best.h/2, b.y + b.h/2);
-            const inter = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
-            const union = (best.w * best.h) + (b.w * b.h) - inter;
-            return (inter / union) < CONFIG.iouThreshold;
-        });
-    }
-    return result;
-}
-
-function drawPreview(boxes) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const status = document.getElementById('status-bar');
-    status.innerText = boxes.length ? `ВИЖУ КАРТ: ${boxes.length}` : "ПОИСК...";
-
-    boxes.forEach(b => {
-        ctx.strokeStyle = '#00ffea';
-        ctx.lineWidth = 3;
-        ctx.strokeRect(b.x - b.w/2, b.y - b.h/2, b.w, b.h);
-        ctx.fillStyle = '#00ffea';
-        ctx.font = '14px monospace';
-        ctx.fillText(CARDS_EN[b.classId], b.x - b.w/2, b.y - b.h/2 - 5);
-    });
-}
-
-async function takeSnapshot() {
-    isBusy = true;
-    const boxes = await runInference();
-    if (boxes.length === 0) {
-        alert("Карты не обнаружены. Попробуйте поднести ближе.");
-        isBusy = false;
-        return;
-    }
-
-    document.getElementById('video-container').style.display = 'none';
-    document.getElementById('ui').style.display = 'none';
-    const table = document.getElementById('virtual-table');
-    table.style.display = 'flex';
-    table.innerHTML = '';
-    
-    boxes.forEach(b => {
-        const card = document.createElement('div');
-        card.className = 'card-result';
-        const imgName = b.classId === 22 ? 'rubashka.png' : `${CARDS_EN[b.classId]}.jpg`;
-        card.style.backgroundImage = `url('${CONFIG.cardsDir}${imgName}')`;
-        table.appendChild(card);
-    });
-
-    document.getElementById('reset-btn').style.display = 'block';
-}
-
-function resetScanner() {
-    isBusy = false;
-    document.getElementById('virtual-table').style.display = 'none';
-    document.getElementById('video-container').style.display = 'block';
-    document.getElementById('ui').style.display = 'flex';
-    document.getElementById('reset-btn').style.display = 'none';
-}
-
-window.onload = init;
+window.onload = start;
 </script>
 </body>
 </html>
