@@ -3,37 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AURA TAROT FINAL</title>
+    <title>AURA TAROT FINAL FIX</title>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
     <style>
         body { margin: 0; background: #000; color: #00ffea; font-family: 'Courier New', monospace; overflow: hidden; }
         #loader { position: fixed; inset: 0; background: #000; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; }
-        #log { margin-top: 15px; font-size: 12px; color: #555; max-height: 100px; overflow: hidden; }
-        video { width: 100vw; height: 100vh; object-fit: cover; opacity: 0.6; }
+        video { width: 100vw; height: 100vh; object-fit: cover; opacity: 0.7; }
         #canvas { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
-        #btn { position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%); width: 80px; height: 80px; border-radius: 50%; border: 4px solid #00ffea; background: rgba(0,255,234,0.1); z-index: 10; cursor: pointer; box-shadow: 0 0 20px #00ffea; pointer-events: auto; }
-        #status { position: absolute; top: 0; width: 100%; text-align: center; background: rgba(0,0,0,0.7); padding: 10px; z-index: 10; font-weight: bold; }
+        #status { position: absolute; top: 0; width: 100%; text-align: center; background: rgba(0,0,0,0.8); padding: 10px; z-index: 10; border-bottom: 1px solid #00ffea; }
+        #btn-scan { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); width: 80px; height: 80px; border-radius: 50%; border: 4px solid #00ffea; background: rgba(0,255,234,0.1); z-index: 10; cursor: pointer; box-shadow: 0 0 20px #00ffea; }
     </style>
 </head>
 <body>
 
 <div id="loader">
     <h2 style="letter-spacing: 5px;">AURA SYSTEM</h2>
-    <div id="status-msg">Загрузка модулей...</div>
-    <div id="log"></div>
+    <div id="status-msg">Инициализация...</div>
 </div>
 
-<div id="status">ИНИЦИАЛИЗАЦИЯ...</div>
+<div id="status">ПОИСК МОДЕЛИ...</div>
 <video id="video" playsinline muted autoplay></video>
 <canvas id="canvas"></canvas>
-<div id="btn" onclick="capture()"></div>
+<div id="btn-scan" onclick="takeSnapshot()"></div>
+
+<canvas id="internal-canvas" width="800" height="800" style="display:none"></canvas>
 
 <script>
-// Настройки проекта
 const CONFIG = {
     model: 'https://raw.githubusercontent.com/marataitester-blip/rider-scanner/main/best.onnx',
-    size: 800,
-    cards: './cards/',
     names: [
         "00-TheFool","01-TheMagician","02-TheHighPriestess","03-TheEmpress","04-TheEmperor","05-TheHierophant","06-TheLovers","07-TheChariot","08-Strength","09-TheHermit","10-WheelOfFortune","11-Justice","12-TheHangedMan","13-Death","14-Temperance","15-TheDevil","16-TheTower","17-TheStar","18-TheMoon","19-TheSun","20-Judgement","21-TheWorld",
         "CardBacks", // 22 индекс
@@ -44,115 +41,118 @@ const CONFIG = {
     ]
 };
 
-let session, video, ctx, canv;
+let session, video, ctx, canv, iCanv, iCtx;
+let lastDetectionTime = 0;
 
-function addLog(m) {
-    const l = document.getElementById('log');
-    l.innerHTML = `> ${m}<br>${l.innerHTML}`;
-    document.getElementById('status-msg').innerText = m;
-}
-
-async function start() {
+async function init() {
+    const msg = document.getElementById('status-msg');
     try {
-        addLog("Шаг 1: Настройка WASM...");
+        msg.innerText = "Настройка WASM...";
         ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/";
         ort.env.wasm.numThreads = 1;
 
-        addLog("Шаг 2: Загрузка модели...");
+        msg.innerText = "Загрузка модели (22MB)...";
         session = await ort.InferenceSession.create(CONFIG.model, { executionProviders: ['wasm'] });
 
-        addLog("Шаг 3: Доступ к камере...");
+        msg.innerText = "Запуск камеры...";
         video = document.getElementById('video');
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: 'environment', width: 1280 } 
-        });
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
         video.srcObject = stream;
 
+        // Инициализация холстов один раз
+        canv = document.getElementById('canvas');
+        iCanv = document.getElementById('internal-canvas');
+        ctx = canv.getContext('2d');
+        iCtx = iCanv.getContext('2d', { willReadFrequently: true });
+
         video.onloadedmetadata = () => {
-            canv = document.getElementById('canvas');
             canv.width = video.videoWidth;
             canv.height = video.videoHeight;
-            ctx = canv.getContext('2d');
             document.getElementById('loader').style.display = 'none';
-            addLog("Система готова!");
-            runLoop();
+            document.getElementById('status').innerText = "СИСТЕМА ГОТОВА";
+            requestAnimationFrame(renderLoop);
         };
     } catch (e) {
-        addLog("КРИТИЧЕСКАЯ ОШИБКА: " + e.message);
-        console.error(e);
+        msg.innerHTML = `<span style="color:red">Ошибка: ${e.message}</span>`;
     }
 }
 
-async function runLoop() {
-    if (!session) return;
-    const boxes = await detect();
-    draw(boxes);
-    requestAnimationFrame(runLoop);
+async function renderLoop(now) {
+    // Детекция не чаще чем раз в 500мс, чтобы не вешать телефон
+    if (now - lastDetectionTime > 500) {
+        lastDetectionTime = now;
+        const boxes = await runInference();
+        draw(boxes);
+    }
+    requestAnimationFrame(renderLoop);
 }
 
-async function detect() {
-    const internal = document.createElement('canvas');
-    internal.width = internal.height = 800;
-    const ictx = internal.getContext('2d');
-    
-    const scale = Math.min(800/video.videoWidth, 800/video.videoHeight);
-    const x = (800 - video.videoWidth * scale) / 2;
-    const y = (800 - video.videoHeight * scale) / 2;
-    
-    ictx.fillStyle = "#000";
-    ictx.fillRect(0,0,800,800);
-    ictx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight, x, y, video.videoWidth * scale, video.videoHeight * scale);
+async function runInference() {
+    if (!video.videoWidth || !session) return [];
 
-    const data = ictx.getImageData(0,0,800,800).data;
-    const r = [], g = [], b = [];
-    for(let i=0; i<data.length; i+=4) {
-        r.push(data[i]/255); g.push(data[i+1]/255); b.push(data[i+2]/255);
+    // 1. Подготовка изображения (800x800) без создания новых объектов
+    iCtx.fillStyle = "#000";
+    iCtx.fillRect(0, 0, 800, 800);
+    const scale = Math.min(800 / video.videoWidth, 800 / video.videoHeight);
+    const dx = (800 - video.videoWidth * scale) / 2;
+    const dy = (800 - video.videoHeight * scale) / 2;
+    iCtx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight, dx, dy, video.videoWidth * scale, video.videoHeight * scale);
+
+    // 2. Создание тензора
+    const data = iCtx.getImageData(0, 0, 800, 800).data;
+    const input = new Float32Array(3 * 800 * 800);
+    for (let i = 0; i < 800 * 800; i++) {
+        input[i] = data[i * 4] / 255;
+        input[i + 800 * 800] = data[i * 4 + 1] / 255;
+        input[i + 2 * 800 * 800] = data[i * 4 + 2] / 255;
     }
 
-    const tensor = new ort.Tensor('float32', new Float32Array([...r, ...g, ...b]), [1, 3, 800, 800]);
-    const out = await session.run({ [session.inputNames[0]]: tensor });
-    return process(out[session.outputNames[0]], scale, x, y);
+    const tensor = new ort.Tensor('float32', input, [1, 3, 800, 800]);
+    const output = await session.run({ [session.inputNames[0]]: tensor });
+    return processOutput(output[session.outputNames[0]], scale, dx, dy);
 }
 
-function process(out, scale, dx, dy) {
-    const d = out.data;
+function processOutput(out, scale, dx, dy) {
+    const data = out.data;
+    const anchors = out.dims[2];
     const results = [];
-    for(let i=0; i<out.dims[2]; i++) {
+    for (let i = 0; i < anchors; i++) {
         let max = 0, cls = -1;
-        for(let c=0; c<79; c++) {
-            let s = d[(c+4)*out.dims[2]+i];
-            if(s > max) { max = s; cls = c; }
+        for (let c = 0; c < 79; c++) {
+            let s = data[(c + 4) * anchors + i];
+            if (s > max) { max = s; cls = c; }
         }
-        if(max > 0.4) {
+        if (max > 0.45) {
             results.push({
-                x: (d[0*out.dims[2]+i] - dx)/scale,
-                y: (d[1*out.dims[2]+i] - dy)/scale,
-                w: d[2*out.dims[2]+i]/scale,
-                h: d[3*out.dims[2]+i]/scale,
+                x: (data[0 * anchors + i] - dx) / scale,
+                y: (data[1 * anchors + i] - dy) / scale,
+                w: data[2 * anchors + i] / scale,
+                h: data[3 * anchors + i] / scale,
                 cls: cls
             });
         }
     }
-    return results;
+    return results; // Здесь можно добавить NMS для очистки дублей
 }
 
 function draw(boxes) {
-    ctx.clearRect(0,0,canv.width, canv.height);
-    document.getElementById('status').innerText = boxes.length ? `ВИЖУ КАРТ: ${boxes.length}` : "ПОИСК...";
+    ctx.clearRect(0, 0, canv.width, canv.height);
+    document.getElementById('status').innerText = boxes.length ? `КАРТ В КАДРЕ: ${boxes.length}` : "ПОИСК КАРТ...";
     boxes.forEach(b => {
         ctx.strokeStyle = "#00ffea";
         ctx.lineWidth = 4;
-        ctx.strokeRect(b.x - b.w/2, b.y - b.h/2, b.w, b.h);
+        ctx.strokeRect(b.x - b.w / 2, b.y - b.h / 2, b.w, b.h);
         ctx.fillStyle = "#00ffea";
-        ctx.fillText(CONFIG.names[b.cls], b.x - b.w/2, b.y - b.h/2 - 10);
+        ctx.font = "16px monospace";
+        ctx.fillText(CONFIG.names[b.cls], b.x - b.w / 2, b.y - b.h / 2 - 10);
     });
 }
 
-function capture() {
-    alert("Скан зафиксирован. Переход к толкованию...");
+function takeSnapshot() {
+    alert("Скан выполнен! Сохраняю расклад...");
 }
 
-window.onload = start;
+window.onload = init;
 </script>
 </body>
 </html><!DOCTYPE html>
@@ -160,37 +160,34 @@ window.onload = start;
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AURA TAROT FINAL</title>
+    <title>AURA TAROT FINAL FIX</title>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
     <style>
         body { margin: 0; background: #000; color: #00ffea; font-family: 'Courier New', monospace; overflow: hidden; }
         #loader { position: fixed; inset: 0; background: #000; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; }
-        #log { margin-top: 15px; font-size: 12px; color: #555; max-height: 100px; overflow: hidden; }
-        video { width: 100vw; height: 100vh; object-fit: cover; opacity: 0.6; }
+        video { width: 100vw; height: 100vh; object-fit: cover; opacity: 0.7; }
         #canvas { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
-        #btn { position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%); width: 80px; height: 80px; border-radius: 50%; border: 4px solid #00ffea; background: rgba(0,255,234,0.1); z-index: 10; cursor: pointer; box-shadow: 0 0 20px #00ffea; pointer-events: auto; }
-        #status { position: absolute; top: 0; width: 100%; text-align: center; background: rgba(0,0,0,0.7); padding: 10px; z-index: 10; font-weight: bold; }
+        #status { position: absolute; top: 0; width: 100%; text-align: center; background: rgba(0,0,0,0.8); padding: 10px; z-index: 10; border-bottom: 1px solid #00ffea; }
+        #btn-scan { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); width: 80px; height: 80px; border-radius: 50%; border: 4px solid #00ffea; background: rgba(0,255,234,0.1); z-index: 10; cursor: pointer; box-shadow: 0 0 20px #00ffea; }
     </style>
 </head>
 <body>
 
 <div id="loader">
     <h2 style="letter-spacing: 5px;">AURA SYSTEM</h2>
-    <div id="status-msg">Загрузка модулей...</div>
-    <div id="log"></div>
+    <div id="status-msg">Инициализация...</div>
 </div>
 
-<div id="status">ИНИЦИАЛИЗАЦИЯ...</div>
+<div id="status">ПОИСК МОДЕЛИ...</div>
 <video id="video" playsinline muted autoplay></video>
 <canvas id="canvas"></canvas>
-<div id="btn" onclick="capture()"></div>
+<div id="btn-scan" onclick="takeSnapshot()"></div>
+
+<canvas id="internal-canvas" width="800" height="800" style="display:none"></canvas>
 
 <script>
-// Настройки проекта
 const CONFIG = {
     model: 'https://raw.githubusercontent.com/marataitester-blip/rider-scanner/main/best.onnx',
-    size: 800,
-    cards: './cards/',
     names: [
         "00-TheFool","01-TheMagician","02-TheHighPriestess","03-TheEmpress","04-TheEmperor","05-TheHierophant","06-TheLovers","07-TheChariot","08-Strength","09-TheHermit","10-WheelOfFortune","11-Justice","12-TheHangedMan","13-Death","14-Temperance","15-TheDevil","16-TheTower","17-TheStar","18-TheMoon","19-TheSun","20-Judgement","21-TheWorld",
         "CardBacks", // 22 индекс
@@ -201,115 +198,432 @@ const CONFIG = {
     ]
 };
 
-let session, video, ctx, canv;
+let session, video, ctx, canv, iCanv, iCtx;
+let lastDetectionTime = 0;
 
-function addLog(m) {
-    const l = document.getElementById('log');
-    l.innerHTML = `> ${m}<br>${l.innerHTML}`;
-    document.getElementById('status-msg').innerText = m;
-}
-
-async function start() {
+async function init() {
+    const msg = document.getElementById('status-msg');
     try {
-        addLog("Шаг 1: Настройка WASM...");
+        msg.innerText = "Настройка WASM...";
         ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/";
         ort.env.wasm.numThreads = 1;
 
-        addLog("Шаг 2: Загрузка модели...");
+        msg.innerText = "Загрузка модели (22MB)...";
         session = await ort.InferenceSession.create(CONFIG.model, { executionProviders: ['wasm'] });
 
-        addLog("Шаг 3: Доступ к камере...");
+        msg.innerText = "Запуск камеры...";
         video = document.getElementById('video');
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: 'environment', width: 1280 } 
-        });
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
         video.srcObject = stream;
 
+        // Инициализация холстов один раз
+        canv = document.getElementById('canvas');
+        iCanv = document.getElementById('internal-canvas');
+        ctx = canv.getContext('2d');
+        iCtx = iCanv.getContext('2d', { willReadFrequently: true });
+
         video.onloadedmetadata = () => {
-            canv = document.getElementById('canvas');
             canv.width = video.videoWidth;
             canv.height = video.videoHeight;
-            ctx = canv.getContext('2d');
             document.getElementById('loader').style.display = 'none';
-            addLog("Система готова!");
-            runLoop();
+            document.getElementById('status').innerText = "СИСТЕМА ГОТОВА";
+            requestAnimationFrame(renderLoop);
         };
     } catch (e) {
-        addLog("КРИТИЧЕСКАЯ ОШИБКА: " + e.message);
-        console.error(e);
+        msg.innerHTML = `<span style="color:red">Ошибка: ${e.message}</span>`;
     }
 }
 
-async function runLoop() {
-    if (!session) return;
-    const boxes = await detect();
-    draw(boxes);
-    requestAnimationFrame(runLoop);
+async function renderLoop(now) {
+    // Детекция не чаще чем раз в 500мс, чтобы не вешать телефон
+    if (now - lastDetectionTime > 500) {
+        lastDetectionTime = now;
+        const boxes = await runInference();
+        draw(boxes);
+    }
+    requestAnimationFrame(renderLoop);
 }
 
-async function detect() {
-    const internal = document.createElement('canvas');
-    internal.width = internal.height = 800;
-    const ictx = internal.getContext('2d');
-    
-    const scale = Math.min(800/video.videoWidth, 800/video.videoHeight);
-    const x = (800 - video.videoWidth * scale) / 2;
-    const y = (800 - video.videoHeight * scale) / 2;
-    
-    ictx.fillStyle = "#000";
-    ictx.fillRect(0,0,800,800);
-    ictx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight, x, y, video.videoWidth * scale, video.videoHeight * scale);
+async function runInference() {
+    if (!video.videoWidth || !session) return [];
 
-    const data = ictx.getImageData(0,0,800,800).data;
-    const r = [], g = [], b = [];
-    for(let i=0; i<data.length; i+=4) {
-        r.push(data[i]/255); g.push(data[i+1]/255); b.push(data[i+2]/255);
+    // 1. Подготовка изображения (800x800) без создания новых объектов
+    iCtx.fillStyle = "#000";
+    iCtx.fillRect(0, 0, 800, 800);
+    const scale = Math.min(800 / video.videoWidth, 800 / video.videoHeight);
+    const dx = (800 - video.videoWidth * scale) / 2;
+    const dy = (800 - video.videoHeight * scale) / 2;
+    iCtx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight, dx, dy, video.videoWidth * scale, video.videoHeight * scale);
+
+    // 2. Создание тензора
+    const data = iCtx.getImageData(0, 0, 800, 800).data;
+    const input = new Float32Array(3 * 800 * 800);
+    for (let i = 0; i < 800 * 800; i++) {
+        input[i] = data[i * 4] / 255;
+        input[i + 800 * 800] = data[i * 4 + 1] / 255;
+        input[i + 2 * 800 * 800] = data[i * 4 + 2] / 255;
     }
 
-    const tensor = new ort.Tensor('float32', new Float32Array([...r, ...g, ...b]), [1, 3, 800, 800]);
-    const out = await session.run({ [session.inputNames[0]]: tensor });
-    return process(out[session.outputNames[0]], scale, x, y);
+    const tensor = new ort.Tensor('float32', input, [1, 3, 800, 800]);
+    const output = await session.run({ [session.inputNames[0]]: tensor });
+    return processOutput(output[session.outputNames[0]], scale, dx, dy);
 }
 
-function process(out, scale, dx, dy) {
-    const d = out.data;
+function processOutput(out, scale, dx, dy) {
+    const data = out.data;
+    const anchors = out.dims[2];
     const results = [];
-    for(let i=0; i<out.dims[2]; i++) {
+    for (let i = 0; i < anchors; i++) {
         let max = 0, cls = -1;
-        for(let c=0; c<79; c++) {
-            let s = d[(c+4)*out.dims[2]+i];
-            if(s > max) { max = s; cls = c; }
+        for (let c = 0; c < 79; c++) {
+            let s = data[(c + 4) * anchors + i];
+            if (s > max) { max = s; cls = c; }
         }
-        if(max > 0.4) {
+        if (max > 0.45) {
             results.push({
-                x: (d[0*out.dims[2]+i] - dx)/scale,
-                y: (d[1*out.dims[2]+i] - dy)/scale,
-                w: d[2*out.dims[2]+i]/scale,
-                h: d[3*out.dims[2]+i]/scale,
+                x: (data[0 * anchors + i] - dx) / scale,
+                y: (data[1 * anchors + i] - dy) / scale,
+                w: data[2 * anchors + i] / scale,
+                h: data[3 * anchors + i] / scale,
                 cls: cls
             });
         }
     }
-    return results;
+    return results; // Здесь можно добавить NMS для очистки дублей
 }
 
 function draw(boxes) {
-    ctx.clearRect(0,0,canv.width, canv.height);
-    document.getElementById('status').innerText = boxes.length ? `ВИЖУ КАРТ: ${boxes.length}` : "ПОИСК...";
+    ctx.clearRect(0, 0, canv.width, canv.height);
+    document.getElementById('status').innerText = boxes.length ? `КАРТ В КАДРЕ: ${boxes.length}` : "ПОИСК КАРТ...";
     boxes.forEach(b => {
         ctx.strokeStyle = "#00ffea";
         ctx.lineWidth = 4;
-        ctx.strokeRect(b.x - b.w/2, b.y - b.h/2, b.w, b.h);
+        ctx.strokeRect(b.x - b.w / 2, b.y - b.h / 2, b.w, b.h);
         ctx.fillStyle = "#00ffea";
-        ctx.fillText(CONFIG.names[b.cls], b.x - b.w/2, b.y - b.h/2 - 10);
+        ctx.font = "16px monospace";
+        ctx.fillText(CONFIG.names[b.cls], b.x - b.w / 2, b.y - b.h / 2 - 10);
     });
 }
 
-function capture() {
-    alert("Скан зафиксирован. Переход к толкованию...");
+function takeSnapshot() {
+    alert("Скан выполнен! Сохраняю расклад...");
 }
 
-window.onload = start;
+window.onload = init;
 </script>
 </body>
-</html>
+</html><!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AURA TAROT FINAL FIX</title>
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
+    <style>
+        body { margin: 0; background: #000; color: #00ffea; font-family: 'Courier New', monospace; overflow: hidden; }
+        #loader { position: fixed; inset: 0; background: #000; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; }
+        video { width: 100vw; height: 100vh; object-fit: cover; opacity: 0.7; }
+        #canvas { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+        #status { position: absolute; top: 0; width: 100%; text-align: center; background: rgba(0,0,0,0.8); padding: 10px; z-index: 10; border-bottom: 1px solid #00ffea; }
+        #btn-scan { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); width: 80px; height: 80px; border-radius: 50%; border: 4px solid #00ffea; background: rgba(0,255,234,0.1); z-index: 10; cursor: pointer; box-shadow: 0 0 20px #00ffea; }
+    </style>
+</head>
+<body>
+
+<div id="loader">
+    <h2 style="letter-spacing: 5px;">AURA SYSTEM</h2>
+    <div id="status-msg">Инициализация...</div>
+</div>
+
+<div id="status">ПОИСК МОДЕЛИ...</div>
+<video id="video" playsinline muted autoplay></video>
+<canvas id="canvas"></canvas>
+<div id="btn-scan" onclick="takeSnapshot()"></div>
+
+<canvas id="internal-canvas" width="800" height="800" style="display:none"></canvas>
+
+<script>
+const CONFIG = {
+    model: 'https://raw.githubusercontent.com/marataitester-blip/rider-scanner/main/best.onnx',
+    names: [
+        "00-TheFool","01-TheMagician","02-TheHighPriestess","03-TheEmpress","04-TheEmperor","05-TheHierophant","06-TheLovers","07-TheChariot","08-Strength","09-TheHermit","10-WheelOfFortune","11-Justice","12-TheHangedMan","13-Death","14-Temperance","15-TheDevil","16-TheTower","17-TheStar","18-TheMoon","19-TheSun","20-Judgement","21-TheWorld",
+        "CardBacks", // 22 индекс
+        "Cups01","Cups02","Cups03","Cups04","Cups05","Cups06","Cups07","Cups08","Cups09","Cups10","Cups11","Cups12","Cups13","Cups14",
+        "Pentacles01","Pentacles02","Pentacles03","Pentacles04","Pentacles05","Pentacles06","Pentacles07","Pentacles08","Pentacles09","Pentacles10","Pentacles11","Pentacles12","Pentacles13","Pentacles14",
+        "Swords01","Swords02","Swords03","Swords04","Swords05","Swords06","Swords07","Swords08","Swords09","Swords10","Swords11","Swords12","Swords13","Swords14",
+        "Wands01","Wands02","Wands03","Wands04","Wands05","Wands06","Wands07","Wands08","Wands09","Wands10","Wands11","Wands12","Wands13","Wands14"
+    ]
+};
+
+let session, video, ctx, canv, iCanv, iCtx;
+let lastDetectionTime = 0;
+
+async function init() {
+    const msg = document.getElementById('status-msg');
+    try {
+        msg.innerText = "Настройка WASM...";
+        ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/";
+        ort.env.wasm.numThreads = 1;
+
+        msg.innerText = "Загрузка модели (22MB)...";
+        session = await ort.InferenceSession.create(CONFIG.model, { executionProviders: ['wasm'] });
+
+        msg.innerText = "Запуск камеры...";
+        video = document.getElementById('video');
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        video.srcObject = stream;
+
+        // Инициализация холстов один раз
+        canv = document.getElementById('canvas');
+        iCanv = document.getElementById('internal-canvas');
+        ctx = canv.getContext('2d');
+        iCtx = iCanv.getContext('2d', { willReadFrequently: true });
+
+        video.onloadedmetadata = () => {
+            canv.width = video.videoWidth;
+            canv.height = video.videoHeight;
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('status').innerText = "СИСТЕМА ГОТОВА";
+            requestAnimationFrame(renderLoop);
+        };
+    } catch (e) {
+        msg.innerHTML = `<span style="color:red">Ошибка: ${e.message}</span>`;
+    }
+}
+
+async function renderLoop(now) {
+    // Детекция не чаще чем раз в 500мс, чтобы не вешать телефон
+    if (now - lastDetectionTime > 500) {
+        lastDetectionTime = now;
+        const boxes = await runInference();
+        draw(boxes);
+    }
+    requestAnimationFrame(renderLoop);
+}
+
+async function runInference() {
+    if (!video.videoWidth || !session) return [];
+
+    // 1. Подготовка изображения (800x800) без создания новых объектов
+    iCtx.fillStyle = "#000";
+    iCtx.fillRect(0, 0, 800, 800);
+    const scale = Math.min(800 / video.videoWidth, 800 / video.videoHeight);
+    const dx = (800 - video.videoWidth * scale) / 2;
+    const dy = (800 - video.videoHeight * scale) / 2;
+    iCtx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight, dx, dy, video.videoWidth * scale, video.videoHeight * scale);
+
+    // 2. Создание тензора
+    const data = iCtx.getImageData(0, 0, 800, 800).data;
+    const input = new Float32Array(3 * 800 * 800);
+    for (let i = 0; i < 800 * 800; i++) {
+        input[i] = data[i * 4] / 255;
+        input[i + 800 * 800] = data[i * 4 + 1] / 255;
+        input[i + 2 * 800 * 800] = data[i * 4 + 2] / 255;
+    }
+
+    const tensor = new ort.Tensor('float32', input, [1, 3, 800, 800]);
+    const output = await session.run({ [session.inputNames[0]]: tensor });
+    return processOutput(output[session.outputNames[0]], scale, dx, dy);
+}
+
+function processOutput(out, scale, dx, dy) {
+    const data = out.data;
+    const anchors = out.dims[2];
+    const results = [];
+    for (let i = 0; i < anchors; i++) {
+        let max = 0, cls = -1;
+        for (let c = 0; c < 79; c++) {
+            let s = data[(c + 4) * anchors + i];
+            if (s > max) { max = s; cls = c; }
+        }
+        if (max > 0.45) {
+            results.push({
+                x: (data[0 * anchors + i] - dx) / scale,
+                y: (data[1 * anchors + i] - dy) / scale,
+                w: data[2 * anchors + i] / scale,
+                h: data[3 * anchors + i] / scale,
+                cls: cls
+            });
+        }
+    }
+    return results; // Здесь можно добавить NMS для очистки дублей
+}
+
+function draw(boxes) {
+    ctx.clearRect(0, 0, canv.width, canv.height);
+    document.getElementById('status').innerText = boxes.length ? `КАРТ В КАДРЕ: ${boxes.length}` : "ПОИСК КАРТ...";
+    boxes.forEach(b => {
+        ctx.strokeStyle = "#00ffea";
+        ctx.lineWidth = 4;
+        ctx.strokeRect(b.x - b.w / 2, b.y - b.h / 2, b.w, b.h);
+        ctx.fillStyle = "#00ffea";
+        ctx.font = "16px monospace";
+        ctx.fillText(CONFIG.names[b.cls], b.x - b.w / 2, b.y - b.h / 2 - 10);
+    });
+}
+
+function takeSnapshot() {
+    alert("Скан выполнен! Сохраняю расклад...");
+}
+
+window.onload = init;
+</script>
+</body>
+</html><!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AURA TAROT FINAL FIX</title>
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
+    <style>
+        body { margin: 0; background: #000; color: #00ffea; font-family: 'Courier New', monospace; overflow: hidden; }
+        #loader { position: fixed; inset: 0; background: #000; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; }
+        video { width: 100vw; height: 100vh; object-fit: cover; opacity: 0.7; }
+        #canvas { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+        #status { position: absolute; top: 0; width: 100%; text-align: center; background: rgba(0,0,0,0.8); padding: 10px; z-index: 10; border-bottom: 1px solid #00ffea; }
+        #btn-scan { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); width: 80px; height: 80px; border-radius: 50%; border: 4px solid #00ffea; background: rgba(0,255,234,0.1); z-index: 10; cursor: pointer; box-shadow: 0 0 20px #00ffea; }
+    </style>
+</head>
+<body>
+
+<div id="loader">
+    <h2 style="letter-spacing: 5px;">AURA SYSTEM</h2>
+    <div id="status-msg">Инициализация...</div>
+</div>
+
+<div id="status">ПОИСК МОДЕЛИ...</div>
+<video id="video" playsinline muted autoplay></video>
+<canvas id="canvas"></canvas>
+<div id="btn-scan" onclick="takeSnapshot()"></div>
+
+<canvas id="internal-canvas" width="800" height="800" style="display:none"></canvas>
+
+<script>
+const CONFIG = {
+    model: 'https://raw.githubusercontent.com/marataitester-blip/rider-scanner/main/best.onnx',
+    names: [
+        "00-TheFool","01-TheMagician","02-TheHighPriestess","03-TheEmpress","04-TheEmperor","05-TheHierophant","06-TheLovers","07-TheChariot","08-Strength","09-TheHermit","10-WheelOfFortune","11-Justice","12-TheHangedMan","13-Death","14-Temperance","15-TheDevil","16-TheTower","17-TheStar","18-TheMoon","19-TheSun","20-Judgement","21-TheWorld",
+        "CardBacks", // 22 индекс
+        "Cups01","Cups02","Cups03","Cups04","Cups05","Cups06","Cups07","Cups08","Cups09","Cups10","Cups11","Cups12","Cups13","Cups14",
+        "Pentacles01","Pentacles02","Pentacles03","Pentacles04","Pentacles05","Pentacles06","Pentacles07","Pentacles08","Pentacles09","Pentacles10","Pentacles11","Pentacles12","Pentacles13","Pentacles14",
+        "Swords01","Swords02","Swords03","Swords04","Swords05","Swords06","Swords07","Swords08","Swords09","Swords10","Swords11","Swords12","Swords13","Swords14",
+        "Wands01","Wands02","Wands03","Wands04","Wands05","Wands06","Wands07","Wands08","Wands09","Wands10","Wands11","Wands12","Wands13","Wands14"
+    ]
+};
+
+let session, video, ctx, canv, iCanv, iCtx;
+let lastDetectionTime = 0;
+
+async function init() {
+    const msg = document.getElementById('status-msg');
+    try {
+        msg.innerText = "Настройка WASM...";
+        ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/";
+        ort.env.wasm.numThreads = 1;
+
+        msg.innerText = "Загрузка модели (22MB)...";
+        session = await ort.InferenceSession.create(CONFIG.model, { executionProviders: ['wasm'] });
+
+        msg.innerText = "Запуск камеры...";
+        video = document.getElementById('video');
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        video.srcObject = stream;
+
+        // Инициализация холстов один раз
+        canv = document.getElementById('canvas');
+        iCanv = document.getElementById('internal-canvas');
+        ctx = canv.getContext('2d');
+        iCtx = iCanv.getContext('2d', { willReadFrequently: true });
+
+        video.onloadedmetadata = () => {
+            canv.width = video.videoWidth;
+            canv.height = video.videoHeight;
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('status').innerText = "СИСТЕМА ГОТОВА";
+            requestAnimationFrame(renderLoop);
+        };
+    } catch (e) {
+        msg.innerHTML = `<span style="color:red">Ошибка: ${e.message}</span>`;
+    }
+}
+
+async function renderLoop(now) {
+    // Детекция не чаще чем раз в 500мс, чтобы не вешать телефон
+    if (now - lastDetectionTime > 500) {
+        lastDetectionTime = now;
+        const boxes = await runInference();
+        draw(boxes);
+    }
+    requestAnimationFrame(renderLoop);
+}
+
+async function runInference() {
+    if (!video.videoWidth || !session) return [];
+
+    // 1. Подготовка изображения (800x800) без создания новых объектов
+    iCtx.fillStyle = "#000";
+    iCtx.fillRect(0, 0, 800, 800);
+    const scale = Math.min(800 / video.videoWidth, 800 / video.videoHeight);
+    const dx = (800 - video.videoWidth * scale) / 2;
+    const dy = (800 - video.videoHeight * scale) / 2;
+    iCtx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight, dx, dy, video.videoWidth * scale, video.videoHeight * scale);
+
+    // 2. Создание тензора
+    const data = iCtx.getImageData(0, 0, 800, 800).data;
+    const input = new Float32Array(3 * 800 * 800);
+    for (let i = 0; i < 800 * 800; i++) {
+        input[i] = data[i * 4] / 255;
+        input[i + 800 * 800] = data[i * 4 + 1] / 255;
+        input[i + 2 * 800 * 800] = data[i * 4 + 2] / 255;
+    }
+
+    const tensor = new ort.Tensor('float32', input, [1, 3, 800, 800]);
+    const output = await session.run({ [session.inputNames[0]]: tensor });
+    return processOutput(output[session.outputNames[0]], scale, dx, dy);
+}
+
+function processOutput(out, scale, dx, dy) {
+    const data = out.data;
+    const anchors = out.dims[2];
+    const results = [];
+    for (let i = 0; i < anchors; i++) {
+        let max = 0, cls = -1;
+        for (let c = 0; c < 79; c++) {
+            let s = data[(c + 4) * anchors + i];
+            if (s > max) { max = s; cls = c; }
+        }
+        if (max > 0.45) {
+            results.push({
+                x: (data[0 * anchors + i] - dx) / scale,
+                y: (data[1 * anchors + i] - dy) / scale,
+                w: data[2 * anchors + i] / scale,
+                h: data[3 * anchors + i] / scale,
+                cls: cls
+            });
+        }
+    }
+    return results; // Здесь можно добавить NMS для очистки дублей
+}
+
+function draw(boxes) {
+    ctx.clearRect(0, 0, canv.width, canv.height);
+    document.getElementById('status').innerText = boxes.length ? `КАРТ В КАДРЕ: ${boxes.length}` : "ПОИСК КАРТ...";
+    boxes.forEach(b => {
+        ctx.strokeStyle = "#00ffea";
+        ctx.lineWidth = 4;
+        ctx.strokeRect(b.x - b.w / 2, b.y - b.h / 2, b.w, b.h);
+        ctx.fillStyle = "#00ffea";
+        ctx.font = "16px monospace";
+        ctx.fillText(CONFIG.names[b.cls], b.x - b.w / 2, b.y - b.h / 2 - 10);
+    });
+}
+
+function takeSnapshot() {
+    alert("Скан выполнен! Сохраняю расклад...");
+}
+
+window.onload = init;
+</script>
+</body>
+</html>м
