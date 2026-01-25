@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TAROT AI: CDN EDITION</title>
+    <title>TAROT AI: FINAL</title>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
     <style>
-        /* === СТИЛЬ === */
+        /* === СТИЛЬ ИНТЕРФЕЙСА === */
         body { margin: 0; background: #000; overflow: hidden; font-family: monospace; user-select: none; }
         #app { position: relative; width: 100vw; height: 100vh; }
         #video-container { position: absolute; width: 100%; height: 100%; z-index: 1; background: #000; }
@@ -29,11 +29,11 @@
 </head>
 <body>
 <div id="app">
-    <div id="loader">ПОДКЛЮЧЕНИЕ К CDN...<br>Скачиваю best.onnx</div>
+    <div id="loader">ПОДКЛЮЧЕНИЕ К GITHUB RAW...<br>Загрузка best.onnx (22MB)</div>
     <div id="video-container"><video id="video" playsinline muted autoplay></video><canvas id="preview-canvas"></canvas></div>
     <div id="virtual-table"></div>
     <div id="ui">
-        <div style="margin-top:20px; color:#00ffea;">TAROT AI V3 (CDN)</div>
+        <div style="margin-top:20px; color:#00ffea;">TAROT AI V3 (RAW)</div>
         <button id="reset-btn" onclick="reset()">НОВЫЙ СКАН</button>
         <div style="flex-grow:1"></div>
         <div id="scan-btn" onclick="scan()"></div>
@@ -43,9 +43,8 @@
 
 <script>
     const CONFIG = {
-        // === ПРЯМАЯ ССЫЛКА НА ТВОЙ ФАЙЛ В GITHUB ===
-        // Если твой файл называется иначе, поменяй best.onnx на нужное имя
-        model: 'https://cdn.jsdelivr.net/gh/marataitester-blip/rider-scanner@main/best.onnx',
+        // Прямая ссылка на GitHub Raw (обходит лимиты CDN)
+        model: 'https://raw.githubusercontent.com/marataitester-blip/rider-scanner/main/best.onnx',
         
         size: 800, conf: 0.35, iou: 0.45, cards: './cards/' 
     };
@@ -61,11 +60,16 @@
             ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/";
             
             // 1. Проверка URL
-            loader.innerText = "СКАЧИВАНИЕ МОДЕЛИ...\n" + CONFIG.model.split('/').pop();
+            loader.innerText = "ПРОВЕРКА СВЯЗИ...\n" + CONFIG.model.split('/').pop();
+            // Head запрос к Raw ссылке
             const response = await fetch(CONFIG.model, { method: 'HEAD' });
-            if (!response.ok) throw new Error(`Файл не найден (HTTP ${response.status}) по ссылке CDN.`);
+            if (!response.ok) {
+                // Если 404 - значит файла реально нет, или имя не best.onnx
+                throw new Error(`Файл не найден (HTTP ${response.status}) на GitHub.\nУбедись, что файл best.onnx лежит в корне репозитория rider-scanner.`);
+            }
             
             // 2. Инициализация
+            loader.innerText = "ЗАГРУЗКА NEURAL ENGINE...";
             session = await ort.InferenceSession.create(CONFIG.model, { executionProviders: ['wasm'] });
             
             video = document.getElementById('video');
@@ -82,7 +86,7 @@
         } catch(e) {
             console.error(e);
             loader.style.borderColor = "#ff0000"; loader.style.color = "#ff0000";
-            if (typeof e === 'number' || e.message?.includes('status')) loader.innerText = "ОШИБКА CDN:\nФайл поврежден или ссылка неверна.";
+            if (typeof e === 'number' || e.message?.includes('status')) loader.innerText = "ОШИБКА ЗАГРУЗКИ:\nФайл поврежден при передаче.";
             else loader.innerText = "ОШИБКА:\n" + e.message;
         }
     }
