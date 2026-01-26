@@ -3,30 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AURA ZERO: STABLE CORE</title>
+    <title>AURA AI ZERO: SAFE MODE</title>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/ort.min.js"></script>
     <style>
         :root { --neon: #00ffea; --gold: #ffd700; --err: #ff4444; }
         body { margin: 0; background: #000; color: var(--neon); font-family: 'Courier New', monospace; overflow: hidden; }
-        
         #loader { position: fixed; inset: 0; background: #000; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; }
-        #log { font-size: 10px; color: #555; margin-top: 20px; text-align: left; width: 100%; max-width: 300px; }
-        
+        #log-area { font-size: 10px; color: #666; margin-top: 20px; text-align: left; width: 100%; max-width: 350px; border-top: 1px solid #222; padding-top: 10px; }
         #scanner-ui { position: absolute; inset: 0; z-index: 10; display: none; }
         video { width: 100%; height: 100%; object-fit: cover; opacity: 0.8; }
         canvas { position: absolute; inset: 0; pointer-events: none; }
-        
-        #status-bar { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 10px 20px; border: 1px solid var(--neon); border-radius: 5px; width: 80%; text-align: center; z-index: 20; font-size: 14px; }
+        #status-bar { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 12px; border: 1px solid var(--neon); border-radius: 5px; width: 85%; text-align: center; z-index: 20; font-size: 14px; }
         #action-btn { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); width: 80px; height: 80px; border-radius: 50%; border: 4px solid var(--neon); background: rgba(0,255,234,0.1); z-index: 30; pointer-events: auto; }
-        #action-btn.ready { border-color: var(--gold); box-shadow: 0 0 20px var(--gold); background: rgba(255, 215, 0, 0.1); }
+        #action-btn.ready { border-color: var(--gold); box-shadow: 0 0 20px var(--gold); }
     </style>
 </head>
 <body>
 
 <div id="loader">
     <div style="font-size: 24px; letter-spacing: 5px; margin-bottom: 20px;">AURA AI ZERO</div>
-    <div id="msg">ИНИЦИАЛИЗАЦИЯ...</div>
-    <div id="log"></div>
+    <div id="msg">ЗАПУСК БЕЗОПАСНОГО РЕЖИМА...</div>
+    <div id="log-area"></div>
 </div>
 
 <div id="scanner-ui">
@@ -37,35 +34,43 @@
 </div>
 
 <script>
+// Список имен для твоей колоды (79 классов)
 const NAMES = ["00-TheFool","01-TheMagician","02-TheHighPriestess","03-TheEmpress","04-TheEmperor","05-TheHierophant","06-TheLovers","07-TheChariot","08-Strength","09-TheHermit","10-WheelOfFortune","11-Justice","12-TheHangedMan","13-Death","14-Temperance","15-TheDevil","16-TheTower","17-TheStar","18-TheMoon","19-TheSun","20-Judgement","21-TheWorld","CardBacks","Cups01","Cups02","Cups03","Cups04","Cups05","Cups06","Cups07","Cups08","Cups09","Cups10","Cups11","Cups12","Cups13","Cups14","Pentacles01","Pentacles02","Pentacles03","Pentacles04","Pentacles05","Pentacles06","Pentacles07","Pentacles08","Pentacles09","Pentacles10","Pentacles11","Pentacles12","Pentacles13","Pentacles14","Swords01","Swords02","Swords03","Swords04","Swords05","Swords06","Swords07","Swords08","Swords09","Swords10","Swords11","Swords12","Swords13","Swords14","Wands01","Wands02","Wands03","Wands04","Wands05","Wands06","Wands07","Wands08","Wands09","Wands10","Wands11","Wands12","Wands13","Wands14"];
 
 let session, video, canvas, ctx;
 let locked = []; 
 let buffer = {};
 
-function printLog(m) { document.getElementById('log').innerText += "> " + m + "\n"; }
+function addLog(text) {
+    document.getElementById('log-area').innerText += "> " + text + "\n";
+    console.log(text);
+}
 
 async function init() {
     const msg = document.getElementById('msg');
     try {
-        printLog("Настройка WASM...");
-        ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/";
+        addLog("Отключение SIMD и Threads...");
+        // ЖЕСТКИЕ НАСТРОЙКИ СОВМЕСТИМОСТИ
         ort.env.wasm.numThreads = 1;
+        ort.env.wasm.simd = false; 
+        ort.env.wasm.proxy = false;
+        ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/";
 
-        printLog("Загрузка байтов модели tarot_best.onnx...");
-        // Загружаем как ArrayBuffer, чтобы избежать ошибок MIME-типа
+        addLog("Загрузка tarot_best.onnx...");
         const response = await fetch('tarot_best.onnx');
-        if (!response.ok) throw new Error("Файл модели не найден на сервере (404)");
+        if (!response.ok) throw new Error("Файл модели не найден!");
+        
         const modelBuffer = await response.arrayBuffer();
-        printLog("Байты получены: " + modelBuffer.byteLength);
+        addLog("Байты модели: " + modelBuffer.byteLength);
 
-        printLog("Создание сессии...");
+        addLog("Инициализация сессии...");
         session = await ort.InferenceSession.create(modelBuffer, { 
             executionProviders: ['wasm'],
-            graphOptimizationLevel: 'all'
+            graphOptimizationLevel: 'all',
+            executionMode: 'sequential'
         });
 
-        printLog("Доступ к камере...");
+        addLog("Доступ к камере...");
         video = document.getElementById('camera');
         const stream = await navigator.mediaDevices.getUserMedia({ 
             video: { facingMode: 'environment', width: { ideal: 1280 } } 
@@ -84,17 +89,14 @@ async function init() {
         };
 
     } catch (e) {
-        console.error(e);
-        let errText = e.message || String(e);
-        if (typeof e === 'number') errText = "Код ошибки WASM: " + e;
-        msg.innerHTML = `<span style="color:var(--err)">ОШИБКА ИНИЦИАЛИЗАЦИИ:<br>${errText}</span>`;
+        addLog("ОШИБКА: " + e);
+        msg.innerHTML = `<span style="color:var(--err)">КРИТИЧЕСКИЙ СБОЙ:<br>${e.message || e}</span>`;
     }
 }
 
 async function loop() {
     if (document.getElementById('scanner-ui').style.display === 'none') return;
 
-    // Подготовка кадра 640x640 для YOLOv11
     const off = document.createElement('canvas');
     off.width = off.height = 640;
     const oCtx = off.getContext('2d');
@@ -124,14 +126,13 @@ function process(output) {
     const anchors = output.dims[2]; 
     let found = [];
 
-    // Парсинг YOLO (базовый порог 0.5)
     for (let i = 0; i < anchors; i++) {
         let max = 0, cls = -1;
         for (let c = 0; c < 79; c++) {
             let s = d[(c + 4) * anchors + i];
             if (s > max) { max = s; cls = c; }
         }
-        if (max > 0.5) {
+        if (max > 0.45) { // Порог уверенности 45%
             found.push({
                 x: d[0 * anchors + i] * (canvas.width / 640),
                 y: d[1 * anchors + i] * (canvas.height / 640),
@@ -144,13 +145,13 @@ function process(output) {
 
     // ЛОГИКА AURA-LOCK (Постепенная фиксация)
     found.forEach(box => {
-        let id = `${box.cls}_${Math.round(box.x/40)}`; // Уникальный ID области
+        let id = `${box.cls}_${Math.round(box.x/50)}_${Math.round(box.y/50)}`;
         if (locked.some(l => l.id === id)) return;
 
         if (!buffer[id]) buffer[id] = { ...box, id, count: 0 };
         buffer[id].count++;
 
-        if (buffer[id].count > 12) { // Фиксация через 12 кадров стабильности
+        if (buffer[id].count > 10) { 
             locked.push(buffer[id]);
             if (navigator.vibrate) navigator.vibrate(50);
             delete buffer[id];
@@ -163,17 +164,17 @@ function process(output) {
 function render(found) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // Рисуем зафиксированные (Золотые рамки)
+    // Рисуем зафиксированные (Золотые)
     locked.forEach(c => {
         ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 4;
         ctx.strokeRect(c.x - c.w/2, c.y - c.h/2, c.w, c.h);
-        ctx.fillStyle = '#ffd700'; ctx.font = "bold 12px monospace";
+        ctx.fillStyle = '#ffd700'; ctx.font = "12px Arial";
         ctx.fillText(NAMES[c.cls], c.x - c.w/2, c.y - c.h/2 - 5);
     });
 
-    // Рисуем активные (Неоновые пунктиры)
+    // Рисуем активные (Неон)
     found.forEach(b => {
-        let id = `${b.cls}_${Math.round(b.x/40)}`;
+        let id = `${b.cls}_${Math.round(b.x/50)}_${Math.round(b.y/50)}`;
         if (locked.some(l => l.id === id)) return;
         ctx.strokeStyle = '#00ffea'; ctx.lineWidth = 1;
         ctx.setLineDash([5, 5]);
@@ -187,7 +188,7 @@ function render(found) {
 
 function finalize() {
     if (locked.length === 0) return;
-    alert("Зафиксировано " + locked.length + " карт. Передаю Мессиру...");
+    alert("Зафиксировано " + locked.length + " карт. Передаю данные Клоду.");
 }
 
 window.onload = init;
