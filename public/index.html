@@ -3,74 +3,73 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AURA ZERO: IRON STABLE</title>
-    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/ort.min.js"></script>
+    <title>AURA ZERO: CORE STABLE</title>
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.3/dist/ort.min.js"></script>
     <style>
         :root { --gold: #d4af37; --neon: #00ffea; }
-        body { margin: 0; background: #000; color: var(--gold); font-family: 'Courier New', monospace; overflow: hidden; }
+        body { margin: 0; background: #000; color: var(--gold); font-family: sans-serif; overflow: hidden; }
+        
         #loader { position: fixed; inset: 0; background: #000; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
-        #log-area { font-size: 10px; color: #444; margin-top: 20px; text-align: left; max-width: 320px; border-top: 1px solid #222; padding-top: 10px; }
+        #log-area { font-size: 10px; color: #444; margin-top: 20px; text-align: left; width: 80%; max-width: 300px; }
+        
         #ui { position: absolute; inset: 0; z-index: 10; display: none; flex-direction: column; }
-        video { width: 100%; height: 100%; object-fit: cover; opacity: 0.8; }
+        video { width: 100%; height: 100%; object-fit: cover; }
         canvas { position: absolute; inset: 0; pointer-events: none; }
-        #status { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 10px 20px; border: 1px solid var(--gold); border-radius: 5px; z-index: 20; width: 80%; text-align: center; }
-        #btn { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); width: 80px; height: 80px; border-radius: 50%; border: 4px solid var(--gold); background: rgba(212, 175, 55, 0.1); z-index: 30; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 30px; }
+        
+        #status-bar { background: rgba(0,0,0,0.8); padding: 15px; border-bottom: 1px solid var(--gold); text-align: center; font-size: 14px; }
+        #capture-btn { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); width: 80px; height: 80px; border-radius: 50%; border: 4px solid var(--gold); background: rgba(212,175,55,0.1); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 30px; }
     </style>
 </head>
 <body>
 
 <div id="loader">
-    <div style="font-size: 24px; letter-spacing: 5px; color: var(--gold);">AURA SYSTEM</div>
+    <div style="font-size: 24px; letter-spacing: 5px;">AURA SYSTEM</div>
     <div id="msg" style="margin-top:20px;">ИНИЦИАЛИЗАЦИЯ...</div>
     <div id="log-area"></div>
 </div>
 
 <div id="ui">
-    <div id="status">ПОИСК КАРТ...</div>
-    <video id="v" playsinline muted autoplay></video>
-    <canvas id="c"></canvas>
-    <div id="btn" onclick="finalize()">👁️</div>
+    <div id="status-bar">ЗАХВАЧЕНО: 0 / 11</div>
+    <video id="webcam" playsinline muted autoplay></video>
+    <canvas id="overlay"></canvas>
+    <div id="capture-btn" onclick="finalize()">👁️</div>
 </div>
 
 <script>
-// Твой массив из 79 имен (строго под tarot_best.onnx)
+// Настройки окружения (копируем из твоей рабочей Ауры 3)
+ort.env.wasm.numThreads = 1;
+ort.env.wasm.simd = false;
+
 const NAMES = ["00-TheFool","01-TheMagician","02-TheHighPriestess","03-TheEmpress","04-TheEmperor","05-TheHierophant","06-TheLovers","07-TheChariot","08-Strength","09-TheHermit","10-WheelOfFortune","11-Justice","12-TheHangedMan","13-Death","14-Temperance","15-TheDevil","16-TheTower","17-TheStar","18-TheMoon","19-TheSun","20-Judgement","21-TheWorld","CardBacks","Cups01","Cups02","Cups03","Cups04","Cups05","Cups06","Cups07","Cups08","Cups09","Cups10","Cups11","Cups12","Cups13","Cups14","Pentacles01","Pentacles02","Pentacles03","Pentacles04","Pentacles05","Pentacles06","Pentacles07","Pentacles08","Pentacles09","Pentacles10","Pentacles11","Pentacles12","Pentacles13","Pentacles14","Swords01","Swords02","Swords03","Swords04","Swords05","Swords06","Swords07","Swords08","Swords09","Swords10","Swords11","Swords12","Swords13","Swords14","Wands01","Wands02","Wands03","Wands04","Wands05","Wands06","Wands07","Wands08","Wands09","Wands10","Wands11","Wands12","Wands13","Wands14"];
 
 let session, video, canvas, ctx;
-let locked = new Map(); // Храним зафиксированные карты по ID
+let locked = new Map();
 
-function logger(t) { document.getElementById('log-area').innerText += "> " + t + "\n"; }
+function addLog(t) { document.getElementById('log-area').innerText += "> " + t + "\n"; }
 
 async function init() {
     const msg = document.getElementById('msg');
     try {
-        logger("Настройка Safe Mode...");
-        // Отключаем ВСЁ, что может вызвать ошибки 30540976 и 30541768
-        ort.env.wasm.numThreads = 1;
-        ort.env.wasm.simd = false;
-        ort.env.wasm.proxy = false;
-        ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/";
-
-        logger("Загрузка модели (10.7MB)...");
+        addLog("Загрузка модели tarot_best.onnx...");
         const res = await fetch('tarot_best.onnx');
-        if (!res.ok) throw new Error("Файл не найден!");
+        if (!res.ok) throw new Error("Модель не найдена");
         const buffer = await res.arrayBuffer();
-        
-        logger("Создание сессии (Без оптимизаций)...");
-        // graphOptimizationLevel: 'disabled' — это прямое решение твоей ошибки
+        addLog("Размер: " + buffer.byteLength + " байт");
+
+        addLog("Создание сессии (Backend: WASM)...");
+        // Отключаем оптимизации, которые вызывают 30540976
         session = await ort.InferenceSession.create(buffer, { 
             executionProviders: ['wasm'],
-            graphOptimizationLevel: 'disabled',
-            executionMode: 'sequential'
+            graphOptimizationLevel: 'disabled' 
         });
 
-        logger("Доступ к камере...");
-        video = document.getElementById('v');
+        addLog("Подключение камеры...");
+        video = document.getElementById('webcam');
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
         video.srcObject = stream;
         
         video.onloadedmetadata = () => {
-            canvas = document.getElementById('c');
+            canvas = document.getElementById('overlay');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             ctx = canvas.getContext('2d');
@@ -79,20 +78,20 @@ async function init() {
             loop();
         };
     } catch (e) {
-        msg.innerHTML = `<span style="color:red">СБОЙ:<br>${e.message || e}</span>`;
-        logger("Ошибка: " + e);
+        msg.innerHTML = `<span style="color:red">ОШИБКА:<br>${e.message || e}</span>`;
+        addLog("Сбой: " + e);
     }
 }
 
 async function loop() {
     if (document.getElementById('ui').style.display === 'none') return;
 
-    // Подготовка кадра 640x640 (YOLOv11)
+    // Подготовка кадра 640x640
     const mat = document.createElement('canvas');
     mat.width = mat.height = 640;
     const mCtx = mat.getContext('2d');
     mCtx.drawImage(video, 0, 0, 640, 640);
-    const imgData = mCtx.getImageData(0, 0, 640, 640).data;
+    const imgData = mCtx.getImageData(0,0,640,640).data;
     
     const input = new Float32Array(3 * 640 * 640);
     for (let i=0; i<640*640; i++) {
@@ -111,54 +110,47 @@ async function loop() {
 }
 
 function process(data) {
-    const anchors = 8400; // YOLOv11 стандарт
+    const anchors = 8400; // YOLOv11
     const sx = canvas.width / 640;
     const sy = canvas.height / 640;
     
     ctx.clearRect(0,0,canvas.width,canvas.height);
-    
-    // Используем Map для уникальности карт (как в твоей Ауре 3)
-    let frameSeen = new Set();
+    let currentFrameIds = new Set();
 
     for (let i=0; i<anchors; i++) {
         let conf = 0, cls = -1;
-        // 79 классов (4 координаты + 79 вероятностей)
         for (let c=4; c<83; c++) {
             let s = data[c*anchors+i];
             if (s > conf) { conf = s; cls = c-4; }
         }
 
-        if (conf > 0.50 && !frameSeen.has(cls)) {
-            frameSeen.add(cls);
-            
+        if (conf > 0.50 && !currentFrameIds.has(cls)) {
+            currentFrameIds.add(cls);
             const x = data[0*anchors+i] * sx;
             const y = data[1*anchors+i] * sy;
             const w = data[2*anchors+i] * sx;
             const h = data[3*anchors+i] * sy;
 
-            // Золотая рамка для зафиксированных, Неон для новых
-            if (locked.has(cls)) {
-                ctx.strokeStyle = "#ffd700"; ctx.lineWidth = 4;
-            } else {
-                ctx.strokeStyle = "#00ffea"; ctx.lineWidth = 1;
-                // Авто-фиксация (Aura-Lock)
-                locked.set(cls, { name: NAMES[cls], x: x, y: y });
-                if (navigator.vibrate) navigator.vibrate(40);
-            }
-            
+            // Рисуем рамку: Золото для зафиксированных, Неон для новых
+            ctx.strokeStyle = locked.has(cls) ? "#d4af37" : "#00ffea";
+            ctx.lineWidth = locked.has(cls) ? 4 : 1;
             ctx.strokeRect(x-w/2, y-h/2, w, h);
             ctx.fillStyle = ctx.strokeStyle;
-            ctx.font = "bold 16px Arial";
             ctx.fillText(NAMES[cls], x-w/2, y-h/2 - 10);
+            
+            // Фиксация в память
+            if (!locked.has(cls)) {
+                locked.set(cls, { name: NAMES[cls], x, y });
+                if (navigator.vibrate) navigator.vibrate(40);
+            }
         }
     }
-
-    document.getElementById('status').innerText = `ЗАФИКСИРОВАНО: ${locked.size} / 11`;
+    document.getElementById('status-bar').innerText = `ЗАХВАЧЕНО: ${locked.size} / 11`;
 }
 
 function finalize() {
     if (locked.size === 0) return;
-    alert(`Зафиксировано ${locked.size} карт. Передаю Мессиру на анализ.`);
+    alert(`Зафиксировано карт: ${locked.size}. Данные готовы для Мессира.`);
 }
 
 window.onload = init;
