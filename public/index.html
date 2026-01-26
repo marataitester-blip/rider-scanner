@@ -3,130 +3,76 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AURA ZERO: STABLE CORE</title>
-    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/ort.wasm.min.js"></script>
+    <title>AURA ZERO: DEEP CHECK</title>
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/ort.min.js"></script>
     <style>
-        :root { --neon: #00ffea; --gold: #ffd700; --err: #ff4444; }
-        body { margin: 0; background: #000; color: var(--neon); font-family: 'Courier New', monospace; overflow: hidden; }
-        #loader { position: fixed; inset: 0; background: #000; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; }
-        #scanner-ui { position: absolute; inset: 0; z-index: 10; display: none; }
-        video { width: 100%; height: 100%; object-fit: cover; opacity: 0.8; }
-        canvas { position: absolute; inset: 0; pointer-events: none; }
-        #status { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 10px; border: 1px solid var(--neon); border-radius: 5px; width: 80%; text-align: center; z-index: 20; }
-        #scan-btn { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); width: 80px; height: 80px; border-radius: 50%; border: 4px solid var(--neon); background: rgba(0,255,234,0.1); z-index: 30; pointer-events: auto; }
-    </style>
+        body { margin: 0; background: #000; color: #00ffea; font-family: monospace; text-align: center; }
+        #log { padding: 20px; font-size: 12px; text-align: left; white-space: pre-wrap; color: #ffd700; }
+        .err { color: #ff4444; }
+    </small></style>
 </head>
 <body>
 
 <div id="loader">
-    <div style="font-size: 24px; letter-spacing: 5px; margin-bottom: 20px;">AURA AI ZERO</div>
-    <div id="msg">ИНИЦИАЛИЗАЦИЯ...</div>
+    <h2 style="letter-spacing: 5px;">AURA AI ZERO</h2>
+    <div id="status">ПРОВЕРКА СВЯЗИ...</div>
+    <div id="log"></div>
 </div>
 
-<div id="scanner-ui">
-    <div id="status">ПОИСК КАРТ...</div>
-    <video id="camera" playsinline muted autoplay></video>
-    <canvas id="overlay"></canvas>
-    <div id="scan-btn" onclick="finalize()"></div>
+<div id="scanner" style="display:none;">
+    <video id="webcam" playsinline muted autoplay style="width:100%;"></video>
 </div>
 
 <script>
-let session, video, canvas, ctx;
-let locked = []; 
-let buffer = {};
+function logger(msg, isErr = false) {
+    const logDiv = document.getElementById('log');
+    logDiv.innerHTML += `<div class="${isErr ? 'err' : ''}">> ${msg}</div>`;
+}
 
 async function init() {
-    const msg = document.getElementById('msg');
     try {
-        msg.innerText = "НАСТРОЙКА WASM...";
+        logger("Запуск инициализации...");
         
-        // Твоя правка №3: явная фиксация путей и потоков
-        ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/";
-        ort.env.wasm.numThreads = 1; 
+        // 1. Тест физического наличия модели
+        logger("Проверка файла tarot_best.onnx...");
+        const response = await fetch('tarot_best.onnx', { method: 'HEAD' });
+        if (!response.ok) throw new Error(`Файл не найден (Статус: ${response.status}). Убедись, что он в папке public.`);
+        logger("Файл модели обнаружен на сервере.");
 
-        msg.innerText = "ЗАГРУЗКА МОДЕЛИ (tarot_best.onnx)...";
-        
-        // Твоя правка №4: загрузка без лишних путей
-        session = await ort.InferenceSession.create('tarot_best.onnx', { 
+        // 2. Настройка путей WASM
+        ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/";
+        ort.env.wasm.numThreads = 1;
+        logger("WASM пути настроены.");
+
+        // 3. Создание сессии
+        logger("Попытка создания сессии ORT...");
+        const session = await ort.InferenceSession.create('./tarot_best.onnx', {
             executionProviders: ['wasm'],
             graphOptimizationLevel: 'all'
         });
+        
+        logger("УСПЕХ: Сессия создана. Входы: " + session.inputNames);
+        document.getElementById('status').innerText = "ИНТЕЛЛЕКТ ЗАГРУЖЕН";
+        
+        // Включение камеры
+        startCamera();
 
-        msg.innerText = "ПОДКЛЮЧЕНИЕ КАМЕРЫ...";
-        video = document.getElementById('camera');
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: 'environment', width: { ideal: 1280 } } 
-        });
-        video.srcObject = stream;
-
-        video.onloadedmetadata = () => {
-            canvas = document.getElementById('overlay');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx = canvas.getContext('2d');
-            
-            document.getElementById('loader').style.display = 'none';
-            document.getElementById('scanner-ui').style.display = 'block';
-            loop();
-        };
-
-    // Твоя правка №1: Расширенная диагностика ошибки
     } catch (e) {
-        console.error("Full Error Object:", e);
-        let text;
-        if (e && e.message) {
-            text = e.message;
-        } else if (typeof e === 'number') {
-            text = "Код ошибки: " + e + " (бинарный код onnxruntime)";
-        } else {
-            try { text = JSON.stringify(e); } catch { text = String(e); }
-        }
-        msg.innerHTML = `<span style="color:var(--err)">КРИТИЧЕСКАЯ ОШИБКА:<br>${text}</span><br><small>Проверь наличие tarot_best.onnx в корне</small>`;
+        logger("КРИТИЧЕСКИЙ СБОЙ: " + (e.message || e), true);
+        if (typeof e === 'number') logger("Код ошибки WASM: " + e + ". Это часто означает неверный MIME-тип файла.", true);
+        console.error(e);
     }
 }
 
-// Твоя правка №5: Страховка loop от падений
-async function loop() {
-    if (document.getElementById('scanner-ui').style.display === 'none') return;
-
-    const off = document.createElement('canvas');
-    off.width = off.height = 640;
-    const oCtx = off.getContext('2d');
-    oCtx.drawImage(video, 0, 0, 640, 640);
-    const data = oCtx.getImageData(0, 0, 640, 640).data;
-    
-    const input = new Float32Array(3 * 640 * 640);
-    for (let i = 0; i < 640 * 640; i++) {
-        input[i] = data[i * 4] / 255;
-        input[i + 640 * 640] = data[i * 4 + 1] / 255;
-        input[i + 2 * 640 * 640] = data[i * 4 + 2] / 255;
-    }
-
+async function startCamera() {
     try {
-        const tensor = new ort.Tensor('float32', input, [1, 3, 640, 640]);
-        const results = await session.run({ [session.inputNames[0]]: tensor });
-        const output = results[session.outputNames[0]];
-        process(output);
-    } catch (e) {
-        console.error("Inference error:", e);
-        document.getElementById('status').innerText = "Ошибка инференса: " + (e.message || e);
+        const video = document.getElementById('webcam');
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        video.srcObject = stream;
+        document.getElementById('scanner').style.display = 'block';
+    } catch (err) {
+        logger("Ошибка камеры: " + err.message, true);
     }
-    
-    requestAnimationFrame(loop);
-}
-
-// Базовая логика процесса (оставляем твою структуру)
-function process(output) {
-    const d = output.data;
-    const anchors = output.dims[2]; 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // Временная заглушка отрисовки для теста
-    document.getElementById('status').innerText = `СИСТЕМА АКТИВНА: ${anchors} АНКЕРОВ`;
-}
-
-function finalize() {
-    alert("Захват расклада запущен...");
 }
 
 window.onload = init;
