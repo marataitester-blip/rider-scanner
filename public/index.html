@@ -3,154 +3,215 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AURA ZERO: DEEP RECOVERY</title>
-    
+    <title>AURA AI ZERO</title>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js"></script>
-    
     <style>
-        :root { --gold: #d4af37; --bg: #000; }
-        body { margin: 0; background: var(--bg); color: var(--gold); font-family: monospace; overflow: hidden; }
-        #loader { position: fixed; inset: 0; background: #000; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; }
-        #log-screen { font-size: 10px; color: #555; margin-top: 20px; text-align: left; width: 100%; max-width: 350px; height: 120px; overflow-y: auto; border-top: 1px solid #222; }
-        #ui { position: absolute; inset: 0; z-index: 10; display: none; flex-direction: column; }
-        video { width: 100%; height: 100%; object-fit: cover; opacity: 0.8; }
-        canvas { position: absolute; inset: 0; pointer-events: none; }
-        #status-bar { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 12px; border: 1px solid var(--gold); border-radius: 5px; width: 85%; text-align: center; z-index: 20; }
-        #action-btn { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); width: 80px; height: 80px; border-radius: 50%; border: 4px solid var(--gold); background: rgba(212, 175, 55, 0.1); z-index: 30; display: flex; align-items: center; justify-content: center; font-size: 30px; }
+        :root { --gold: #ffd700; --neon: #00ffea; --bg: #0a0a0a; }
+        body { margin: 0; background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
+        
+        /* Сканер */
+        #scanner-view { position: fixed; inset: 0; display: flex; flex-direction: column; }
+        video { width: 100%; height: 100%; object-fit: cover; }
+        canvas { position: absolute; inset: 0; z-index: 5; }
+        
+        /* Интерфейс сканера */
+        .overlay-ui { position: absolute; inset: 0; z-index: 10; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; }
+        .top-bar { background: rgba(0,0,0,0.7); padding: 15px; text-align: center; border-bottom: 1px solid var(--neon); font-size: 14px; letter-spacing: 2px; }
+        .bottom-bar { padding: 30px; display: flex; justify-content: center; pointer-events: auto; background: linear-gradient(transparent, rgba(0,0,0,0.8)); }
+        
+        #scan-btn { width: 80px; height: 80px; border-radius: 50%; border: 3px solid var(--neon); background: rgba(0,255,234,0.1); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 30px; transition: 0.3s; }
+        #scan-btn.ready { border-color: var(--gold); background: rgba(255, 215, 0, 0.2); box-shadow: 0 0 20px var(--gold); }
+
+        /* Виртуальный стол */
+        #table-view { position: fixed; inset: 0; background: radial-gradient(#1a1a1a, #000); display: none; flex-direction: column; padding: 20px; overflow-y: auto; z-index: 20; }
+        .cards-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; margin-top: 20px; }
+        .card-slot { width: 100px; text-align: center; cursor: pointer; animation: fadeInUp 0.5s ease forwards; }
+        .card-img { width: 100%; border: 2px solid var(--gold); border-radius: 5px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+        .card-label { font-size: 10px; margin-top: 8px; color: var(--gold); text-transform: uppercase; }
+
+        /* Модальное окно обоснования */
+        #desc-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 100; display: none; align-items: center; justify-content: center; padding: 30px; }
+        .modal-content { background: #111; border: 1px solid var(--gold); padding: 20px; border-radius: 10px; max-width: 400px; text-align: center; }
+        
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
 
-<div id="loader">
-    <div style="font-size: 24px; letter-spacing: 5px; color: var(--gold);">AURA AI ZERO</div>
-    <div id="msg" style="margin-top:20px;">РЕКОНСТРУКЦИЯ ГРАФА...</div>
-    <div id="log-screen"></div>
+<div id="scanner-view">
+    <div class="overlay-ui">
+        <div class="top-bar" id="status">ПОИСК КАРТ... [0/11]</div>
+        <div class="bottom-bar">
+            <div id="scan-btn" onclick="goToTable()">👁️</div>
+        </div>
+    </div>
+    <video id="v" playsinline muted autoplay></video>
+    <canvas id="c"></canvas>
 </div>
 
-<div id="ui">
-    <div id="status-bar">ЗАХВАЧЕНО: 0 / 11</div>
-    <video id="webcam" playsinline muted autoplay></video>
-    <canvas id="overlay"></canvas>
-    <div id="action-btn" onclick="finalize()">👁️</div>
+<div id="table-view">
+    <h2 style="text-align: center; color: var(--gold); font-weight: 300; letter-spacing: 3px;">РАСКЛАД AURA</h2>
+    <div class="cards-grid" id="grid"></div>
+    <button onclick="resetAll()" style="margin: 40px auto; display: block; background: none; border: 1px solid #444; color: #888; padding: 10px 20px; cursor: pointer;">НОВЫЙ СКАН</button>
+</div>
+
+<div id="desc-modal" onclick="this.style.display='none'">
+    <div class="modal-content">
+        <h3 id="m-title" style="color: var(--gold);"></h3>
+        <p id="m-text" style="line-height: 1.6; color: #ccc;"></p>
+        <div style="font-size: 12px; color: #555; margin-top: 20px;">Кликните, чтобы закрыть</div>
+    </div>
 </div>
 
 <script>
 const NAMES = ["00-TheFool","01-TheMagician","02-TheHighPriestess","03-TheEmpress","04-TheEmperor","05-TheHierophant","06-TheLovers","07-TheChariot","08-Strength","09-TheHermit","10-WheelOfFortune","11-Justice","12-TheHangedMan","13-Death","14-Temperance","15-TheDevil","16-TheTower","17-TheStar","18-TheMoon","19-TheSun","20-Judgement","21-TheWorld","CardBacks","Cups01","Cups02","Cups03","Cups04","Cups05","Cups06","Cups07","Cups08","Cups09","Cups10","Cups11","Cups12","Cups13","Cups14","Pentacles01","Pentacles02","Pentacles03","Pentacles04","Pentacles05","Pentacles06","Pentacles07","Pentacles08","Pentacles09","Pentacles10","Pentacles11","Pentacles12","Pentacles13","Pentacles14","Swords01","Swords02","Swords03","Swords04","Swords05","Swords06","Swords07","Swords08","Swords09","Swords10","Swords11","Swords12","Swords13","Swords14","Wands01","Wands02","Wands03","Wands04","Wands05","Wands06","Wands07","Wands08","Wands09","Wands10","Wands11","Wands12","Wands13","Wands14"];
 
+// Заглушка обоснований (для теста)
+const MEANINGS = { "00-TheFool": "Начало пути, риск, невинность.", "01-TheMagician": "Воля, созидание, мастерство.", "13-Death": "Трансформация, окончание этапа.", "21-TheWorld": "Завершение, гармония, успех." };
+
 let session, video, canvas, ctx;
-let locked = new Map();
+let locked = new Map(); 
+let buffer = new Map(); 
 
-function addLog(t) { 
-    const area = document.getElementById('log-screen');
-    if(area) { area.innerText += "> " + t + "\n"; area.scrollTop = area.scrollHeight; }
-}
+async function init() {
+    ort.env.wasm.numThreads = 1;
+    ort.env.wasm.proxy = true;
 
-window.onload = async function() {
-    const msg = document.getElementById('msg');
     try {
-        addLog("Запуск RAW-режима (1.20.1)...");
-        
-        // ГИПЕР-СТАБИЛЬНЫЕ НАСТРОЙКИ
-        ort.env.wasm.numThreads = 1;
-        ort.env.wasm.simd = false;
-        ort.env.wasm.proxy = false; // Отключаем прокси, чтобы видеть прямую ошибку
-        ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/";
-
-        addLog("Чтение tarot_best.onnx...");
         const res = await fetch('tarot_best.onnx');
-        const buffer = await res.arrayBuffer();
-        
-        addLog("Принудительная сборка сессии...");
-        
-        // Эти параметры отключают "умные" функции, которые ломают IR 10 в браузере
-        session = await ort.InferenceSession.create(buffer, { 
-            executionProviders: ['wasm'],
-            graphOptimizationLevel: 'disabled', // ЗАПРЕТ на изменение графа
-            executionMode: 'sequential',
-            enableCpuMemArena: false,           // Защита памяти PyTorch 2.8
-            enableMemPattern: false             // Отключение предсказания памяти
-        });
+        const buf = await res.arrayBuffer();
+        session = await ort.InferenceSession.create(buf, { executionProviders: ['wasm'] });
 
-        addLog("Матрица загружена. Включение Ока...");
-        video = document.getElementById('webcam');
+        video = document.getElementById('v');
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
         video.srcObject = stream;
         
         video.onloadedmetadata = () => {
-            canvas = document.getElementById('overlay');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
+            canvas = document.getElementById('c');
+            canvas.width = video.videoWidth; canvas.height = video.videoHeight;
             ctx = canvas.getContext('2d');
-            document.getElementById('loader').style.display = 'none';
-            document.getElementById('ui').style.display = 'flex';
             loop();
         };
-    } catch (e) {
-        msg.innerHTML = `<span style="color:red">КРИТИЧЕСКИЙ СБОЙ:<br>${e.message || e}</span>`;
-        addLog("ОШИБКА: " + e);
-    }
-};
+    } catch (e) { alert("Ошибка ядра: " + e); }
+}
 
 async function loop() {
-    if (document.getElementById('ui').style.display === 'none') return;
-    const mat = document.createElement('canvas');
-    mat.width = mat.height = 640;
-    const mCtx = mat.getContext('2d');
-    mCtx.drawImage(video, 0, 0, 640, 640);
-    const imgData = mCtx.getImageData(0,0,640,640).data;
+    if (document.getElementById('scanner-view').style.display === 'none') return;
+
+    const off = document.createElement('canvas');
+    off.width = off.height = 640;
+    const oCtx = off.getContext('2d');
+    oCtx.drawImage(video, 0, 0, 640, 640);
+    const data = oCtx.getImageData(0,0,640,640).data;
+    
     const input = new Float32Array(3 * 640 * 640);
     for (let i=0; i<640*640; i++) {
-        input[i] = imgData[i*4]/255.0;
-        input[640*640+i] = imgData[i*4+1]/255.0;
-        input[2*640*640+i] = imgData[i*4+2]/255.0;
+        input[i] = data[i*4]/255;
+        input[i+640*640] = data[i*4+1]/255;
+        input[i+2*640*640] = data[i*4+2]/255;
     }
+
     try {
         const tensor = new ort.Tensor('float32', input, [1, 3, 640, 640]);
-        const out = await session.run({ [session.inputNames[0]]: tensor });
-        process(out[session.outputNames[0]].data);
-    } catch (e) { console.error("Ошибка инференса:", e); }
+        const results = await session.run({ [session.inputNames[0]]: tensor });
+        process(results[session.outputNames[0]].data);
+    } catch (e) { console.error(e); }
+    
     requestAnimationFrame(loop);
 }
 
 function process(data) {
-    const anchors = 8400; 
+    const anchors = 8400;
     const sx = canvas.width / 640;
     const sy = canvas.height / 640;
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    let frameSeen = new Set();
     
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    let frameItems = [];
+
+    // 1. Собираем всё, что видит нейросеть в этом кадре
     for (let i=0; i<anchors; i++) {
         let conf = 0, cls = -1;
         for (let c=4; c<83; c++) {
-            let s = data[c*anchors+i];
-            if (s > conf) { conf = s; cls = c-4; }
+            if (data[c*anchors+i] > conf) { conf = data[c*anchors+i]; cls = c-4; }
         }
-        if (conf > 0.50 && !frameSeen.has(cls)) {
-            frameSeen.add(cls);
-            const x = data[0*anchors+i] * sx;
-            const y = data[1*anchors+i] * sy;
-            const w = data[2*anchors+i] * sx;
-            const h = data[3*anchors+i] * sy;
-
-            ctx.strokeStyle = locked.has(cls) ? "#d4af37" : "#00ffea";
-            ctx.lineWidth = locked.has(cls) ? 4 : 1;
-            ctx.strokeRect(x-w/2, y-h/2, w, h);
-            ctx.fillStyle = ctx.strokeStyle;
-            ctx.fillText(NAMES[cls], x-w/2, y-h/2 - 10);
-            
-            if (!locked.has(cls)) {
-                locked.set(cls, { name: NAMES[cls], x, y });
-                if (navigator.vibrate) navigator.vibrate(40);
-            }
+        if (conf > 0.55) {
+            frameItems.push({
+                cls, 
+                x: data[0*anchors+i]*sx, y: data[1*anchors+i]*sy, 
+                w: data[2*anchors+i]*sx, h: data[3*anchors+i]*sy 
+            });
         }
     }
-    document.getElementById('status-bar').innerText = `ЗАХВАЧЕНО: ${locked.size} / 11`;
+
+    // 2. Логика Стабилизации (Aura-Lock)
+    frameItems.forEach(item => {
+        if (locked.has(item.cls)) return; // Если уже зафиксирована - пропускаем поиск
+
+        let b = buffer.get(item.cls) || { count: 0 };
+        b.count++;
+        buffer.set(item.cls, b);
+
+        if (b.count > 12) { // Порог стабильности
+            locked.set(item.cls, item);
+            if (navigator.vibrate) navigator.vibrate(50);
+            buffer.delete(item.cls);
+        }
+
+        // Рисуем Неон (Поиск)
+        ctx.strokeStyle = "#00ffea"; ctx.setLineDash([5, 5]);
+        ctx.strokeRect(item.x-item.w/2, item.y-item.h/2, item.w, item.h);
+    });
+
+    // 3. Рисуем Золото (Locked)
+    locked.forEach((item, cls) => {
+        ctx.strokeStyle = "#ffd700"; ctx.setLineDash([]); ctx.lineWidth = 4;
+        ctx.strokeRect(item.x-item.w/2, item.y-item.h/2, item.w, item.h);
+        ctx.fillStyle = "#ffd700"; ctx.font = "14px Arial";
+        ctx.fillText(NAMES[cls], item.x-item.w/2, item.y-item.h/2 - 10);
+    });
+
+    // 4. Обновление UI
+    document.getElementById('status').innerText = `ЗАХВАЧЕНО: ${locked.size} / 11`;
+    if (locked.size > 0) document.getElementById('scan-btn').classList.add('ready');
 }
 
-function finalize() {
+function goToTable() {
     if (locked.size === 0) return;
-    alert(`Расклад из ${locked.size} карт зафиксирован.`);
+    
+    const sorted = Array.from(locked.values()).sort((a, b) => a.x - b.x);
+    const grid = document.getElementById('grid');
+    grid.innerHTML = "";
+
+    sorted.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'card-slot';
+        div.onclick = () => showDesc(NAMES[item.cls]);
+        div.innerHTML = `
+            <img src="https://cdn.jsdelivr.net/gh/marataitester-blip/tarot@main/${NAMES[item.cls]}.png" class="card-img" onerror="this.src='https://via.placeholder.com/100x150?text=CARD'">
+            <div class="card-label">${NAMES[item.cls].split('-')[1] || NAMES[item.cls]}</div>
+        `;
+        grid.appendChild(div);
+    });
+
+    document.getElementById('scanner-view').style.display = 'none';
+    document.getElementById('table-view').style.display = 'flex';
 }
+
+function showDesc(name) {
+    document.getElementById('m-title').innerText = name;
+    document.getElementById('m-text').innerText = MEANINGS[name] || "Обоснование этой карты в процессе подготовки Мессиром...";
+    document.getElementById('desc-modal').style.display = 'flex';
+}
+
+function resetAll() {
+    locked.clear(); buffer.clear();
+    document.getElementById('scan-btn').classList.remove('ready');
+    document.getElementById('table-view').style.display = 'none';
+    document.getElementById('scanner-view').style.display = 'flex';
+    loop();
+}
+
+window.onload = init;
 </script>
 </body>
 </html>
