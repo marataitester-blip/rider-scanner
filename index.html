@@ -3,93 +3,83 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AURA ZERO: STABLE LOCK</title>
+    <title>AURA ZERO: FINAL SCANNER</title>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
     <style>
-        :root { --neon: #00ffea; --gold: #ffd700; --bg: #0a0a0a; }
-        body { margin: 0; background: #000; color: var(--neon); font-family: 'Courier New', monospace; overflow: hidden; user-select: none; }
-
-        /* Слой видео и сканера */
-        #scanner-container { position: absolute; inset: 0; z-index: 1; display: block; }
+        :root { --neon: #00ffea; --gold: #ffd700; }
+        body { margin: 0; background: #000; color: var(--neon); font-family: monospace; overflow: hidden; user-select: none; }
+        
+        #scanner-ui { position: absolute; inset: 0; z-index: 10; display: block; }
         video { width: 100%; height: 100%; object-fit: cover; opacity: 0.8; }
         #overlay { position: absolute; inset: 0; pointer-events: none; }
 
-        /* Виртуальный стол */
         #virtual-table { 
             position: absolute; inset: 0; z-index: 20; display: none; 
             background: radial-gradient(circle, #1a1a1a, #000); 
-            overflow: hidden;
         }
         .digital-card {
-            position: absolute; width: 100px; height: 175px; 
+            position: absolute; width: 100px; height: 170px; 
             border: 2px solid var(--gold); border-radius: 8px;
-            background-size: cover; background-color: #111;
-            transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+            background-size: cover; background-position: center;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            transition: 0.5s;
         }
 
-        /* Интерфейс */
-        #ui { position: absolute; inset: 0; z-index: 30; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 20px; }
-        #status-bar { 
-            background: rgba(0,0,0,0.8); padding: 15px; border: 1px solid var(--neon); 
-            text-align: center; border-radius: 5px; pointer-events: auto;
-            text-transform: uppercase; letter-spacing: 2px;
+        #ui-controls { position: absolute; inset: 0; z-index: 30; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 20px; }
+        #status-bar { background: rgba(0,0,0,0.8); padding: 12px; border: 1px solid var(--neon); text-align: center; border-radius: 5px; pointer-events: auto; letter-spacing: 2px; }
+        
+        #scan-btn { 
+            width: 80px; height: 80px; border-radius: 50%; border: 4px solid var(--neon); 
+            background: rgba(0,255,234,0.1); pointer-events: auto; align-self: center; 
+            margin-bottom: 30px; box-shadow: 0 0 20px var(--neon);
         }
+        #scan-btn.ready { border-color: var(--gold); box-shadow: 0 0 30px var(--gold); }
 
-        #action-btn { 
-            width: 90px; height: 90px; border-radius: 50%; border: 4px solid var(--neon); 
-            background: rgba(0,255,234,0.1); pointer-events: auto; cursor: pointer;
-            align-self: center; box-shadow: 0 0 20px var(--neon); 
-            display: flex; align-items: center; justify-content: center; font-weight: bold;
-            transition: 0.3s; margin-bottom: 20px;
-        }
-        #action-btn.ready { border-color: var(--gold); color: var(--gold); box-shadow: 0 0 30px var(--gold); background: rgba(255, 215, 0, 0.1); }
-
-        /* Лоадер */
         #loader { position: fixed; inset: 0; background: #000; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
     </style>
 </head>
 <body>
 
 <div id="loader">
-    <div style="font-size: 32px; margin-bottom: 10px; color: var(--neon); letter-spacing: 10px;">AURA AI</div>
-    <div id="load-msg">ЗАГРУЗКА ИНТЕЛЛЕКТА...</div>
+    <div style="font-size: 28px; color: var(--neon); letter-spacing: 10px; margin-bottom: 10px;">AURA AI</div>
+    <div id="msg">ИНИЦИАЛИЗАЦИЯ ЯДРА...</div>
 </div>
 
-<div id="scanner-container">
-    <video id="webcam" playsinline muted autoplay></video>
+<div id="scanner-ui">
+    <video id="camera" playsinline muted autoplay></video>
     <canvas id="overlay"></canvas>
 </div>
 
 <div id="virtual-table"></div>
 
-<div id="ui">
-    <div id="status-bar">ОЖИДАНИЕ</div>
-    <div id="action-btn" onclick="finalizeLayout()">SCAN</div>
+<div id="ui-controls">
+    <div id="status-bar">ЗАГРУЗКА...</div>
+    <div id="scan-btn" onclick="finalize()"></div>
 </div>
 
 <script>
 const CONFIG = {
-    modelPath: './best.onnx', // Файл из Kaggle
+    modelPath: './tarot_best.onnx',
     imgSize: 640,
-    confThreshold: 0.5,
-    stabilityLimit: 12, // Количество кадров для "Золотой" фиксации
+    confThreshold: 0.45,
+    stabilityLimit: 12, // Кадров до фиксации
     cardsDir: './cards/'
 };
 
 const NAMES = ["00-TheFool","01-TheMagician","02-TheHighPriestess","03-TheEmpress","04-TheEmperor","05-TheHierophant","06-TheLovers","07-TheChariot","08-Strength","09-TheHermit","10-WheelOfFortune","11-Justice","12-TheHangedMan","13-Death","14-Temperance","15-TheDevil","16-TheTower","17-TheStar","18-TheMoon","19-TheSun","20-Judgement","21-TheWorld","CardBacks","Cups01","Cups02","Cups03","Cups04","Cups05","Cups06","Cups07","Cups08","Cups09","Cups10","Cups11","Cups12","Cups13","Cups14","Pentacles01","Pentacles02","Pentacles03","Pentacles04","Pentacles05","Pentacles06","Pentacles07","Pentacles08","Pentacles09","Pentacles10","Pentacles11","Pentacles12","Pentacles13","Pentacles14","Swords01","Swords02","Swords03","Swords04","Swords05","Swords06","Swords07","Swords08","Swords09","Swords10","Swords11","Swords12","Swords13","Swords14","Wands01","Wands02","Wands03","Wands04","Wands05","Wands06","Wands07","Wands08","Wands09","Wands10","Wands11","Wands12","Wands13","Wands14"];
 
 let session, video, canvas, ctx;
-let lockedCards = []; // Те, что Gold
-let tempBuffer = {}; // Те, что Neon
+let lockedCards = []; // Список зафиксированных карт
+let tempBuffer = {};  // Буфер стабильности
 
-async function init() {
-    const msg = document.getElementById('load-msg');
+async function start() {
+    const msg = document.getElementById('msg');
     try {
         ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/";
         session = await ort.InferenceSession.create(CONFIG.modelPath, { executionProviders: ['wasm'] });
         
-        video = document.getElementById('webcam');
+        video = document.getElementById('camera');
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
         video.srcObject = stream;
         
@@ -100,23 +90,22 @@ async function init() {
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             document.getElementById('loader').style.display = 'none';
-            runInference();
+            document.getElementById('status-bar').innerText = "ПОИСК КАРТ...";
+            loop();
         };
     } catch (e) {
         msg.innerHTML = `<span style="color:red">ОШИБКА:<br>${e.message}</span>`;
-        console.error(e);
     }
 }
 
-async function runInference() {
+async function loop() {
     if (document.getElementById('virtual-table').style.display === 'block') return;
 
-    // Подготовка кадра (640x640)
+    // Подготовка кадра 640x640
     const off = document.createElement('canvas');
     off.width = off.height = 640;
     const oCtx = off.getContext('2d');
     oCtx.drawImage(video, 0, 0, 640, 640);
-    
     const data = oCtx.getImageData(0, 0, 640, 640).data;
     const input = new Float32Array(3 * 640 * 640);
     for (let i = 0; i < 640 * 640; i++) {
@@ -127,15 +116,15 @@ async function runInference() {
 
     const tensor = new ort.Tensor('float32', input, [1, 3, 640, 640]);
     const results = await session.run({ [session.inputNames[0]]: tensor });
-    processDetections(results[session.outputNames[0]]);
+    process(results[session.outputNames[0]]);
     
-    setTimeout(runInference, 300); // Ограничиваем частоту для "всепогодности"
+    setTimeout(loop, 250); // Частота сканирования для стабильности
 }
 
-function processDetections(output) {
+function process(output) {
     const d = output.data;
     const anchors = output.dims[2];
-    let currentFound = [];
+    let found = [];
 
     for (let i = 0; i < anchors; i++) {
         let max = 0, cls = -1;
@@ -144,100 +133,75 @@ function processDetections(output) {
             if (s > max) { max = s; cls = c; }
         }
         if (max > CONFIG.confThreshold) {
-            currentFound.push({
+            found.push({
                 x: d[0 * anchors + i] * (video.videoWidth / 640),
                 y: d[1 * anchors + i] * (video.videoHeight / 640),
                 w: d[2 * anchors + i] * (video.videoWidth / 640),
                 h: d[3 * anchors + i] * (video.videoHeight / 640),
-                cls: cls,
-                score: max
+                cls: cls
             });
         }
     }
 
-    // ЛОГИКА AURA-LOCK
-    currentFound.forEach(box => {
-        let id = `${box.cls}_${Math.round(box.x / 30)}_${Math.round(box.y / 30)}`;
-        
-        // Если карта уже в "Золоте", пропускаем
+    // Логика захвата Aura-Lock
+    found.forEach(box => {
+        let id = `${box.cls}_${Math.round(box.x / 40)}_${Math.round(box.y / 40)}`;
         if (lockedCards.some(c => c.id === id)) return;
 
-        if (!tempBuffer[id]) {
-            tempBuffer[id] = { ...box, id: id, count: 0 };
-        }
+        if (!tempBuffer[id]) tempBuffer[id] = { ...box, id, count: 0 };
         tempBuffer[id].count++;
 
         if (tempBuffer[id].count >= CONFIG.stabilityLimit) {
             lockedCards.push(tempBuffer[id]);
-            if (navigator.vibrate) navigator.vibrate(60);
+            if (navigator.vibrate) navigator.vibrate(50);
             delete tempBuffer[id];
         }
     });
 
-    draw(currentFound);
+    draw(found);
 }
 
-function draw(current) {
+function draw(found) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // Рисуем зафиксированные (Золотые)
+    // Рисуем зафиксированные (Золото)
     lockedCards.forEach(c => {
-        ctx.strokeStyle = '#ffd700';
-        ctx.lineWidth = 5;
+        ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 4;
         ctx.strokeRect(c.x - c.w/2, c.y - c.h/2, c.w, c.h);
-        ctx.fillStyle = '#ffd700';
-        ctx.fillText("LOCKED", c.x - c.w/2, c.y - c.h/2 - 5);
     });
 
-    // Рисуем те, что сейчас в процессе (Неон)
-    current.forEach(b => {
-        let id = `${b.cls}_${Math.round(b.x / 30)}_${Math.round(b.y / 30)}`;
-        if (lockedCards.some(lc => lc.id === id)) return;
-        
-        ctx.strokeStyle = '#00ffea';
-        ctx.lineWidth = 2;
+    // Рисуем активные (Неон)
+    found.forEach(b => {
+        ctx.strokeStyle = '#00ffea'; ctx.lineWidth = 1;
         ctx.setLineDash([5, 5]);
         ctx.strokeRect(b.x - b.w/2, b.y - b.h/2, b.w, b.h);
         ctx.setLineDash([]);
     });
 
     const status = document.getElementById('status-bar');
-    status.innerText = `ЗАФИКСИРОВАНО: ${lockedCards.length} / 11`;
-    if (lockedCards.length >= 1) {
-        document.getElementById('action-btn').classList.add('ready');
-    }
+    status.innerText = `ЗАФИКСИРОВАНO: ${lockedCards.length} / 11`;
+    if (lockedCards.length > 0) document.getElementById('scan-btn').classList.add('ready');
 }
 
-function finalizeLayout() {
+function finalize() {
     if (lockedCards.length === 0) return;
-
     const table = document.getElementById('virtual-table');
     table.style.display = 'block';
-    document.getElementById('scanner-container').style.display = 'none';
-    document.getElementById('action-btn').style.display = 'none';
+    document.getElementById('scanner-ui').style.display = 'none';
     
     lockedCards.forEach((c, i) => {
-        const div = document.createElement('div');
-        div.className = 'digital-card';
-        // Сохраняем геометрию расклада
-        div.style.left = (c.x / video.videoWidth * 100) + '%';
-        div.style.top = (c.y / video.videoHeight * 100) + '%';
-        div.style.transform = `translate(-50%, -50%) scale(0)`;
-        
-        const imgName = c.cls === 22 ? 'CardBacks.jpg' : `${NAMES[c.cls]}.jpg`;
-        div.style.backgroundImage = `url('${CONFIG.cardsDir}${imgName}')`;
-        
-        table.appendChild(div);
-        setTimeout(() => {
-            div.style.transform = `translate(-50%, -50%) scale(1)`;
-        }, i * 150);
+        const card = document.createElement('div');
+        card.className = 'digital-card';
+        card.style.left = (c.x / video.videoWidth * 100) + '%';
+        card.style.top = (c.y / video.videoHeight * 100) + '%';
+        const img = c.cls === 22 ? 'CardBacks.jpg' : `${NAMES[c.cls]}.jpg`;
+        card.style.backgroundImage = `url('${CONFIG.cardsDir}${img}')`;
+        table.appendChild(card);
     });
-
-    document.getElementById('status-bar').innerText = "ВИРТУАЛЬНЫЙ СТОЛ: ГОТОВО";
-    document.getElementById('status-bar').style.color = '#ffd700';
+    document.getElementById('status-bar').innerText = "РАСКЛАД ПЕРЕДАН МЕССИРУ";
 }
 
-window.onload = init;
+window.onload = start;
 </script>
 </body>
 </html>
