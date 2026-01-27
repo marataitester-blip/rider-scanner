@@ -3,365 +3,147 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TAROT PRO: STABLE</title>
-    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
+    <title>AURA AI: DIAGNOSTIC V2</title>
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js"></script>
     <style>
-        /* === ВИЗУАЛ === */
-        body { margin: 0; background: #000; overflow: hidden; font-family: monospace; user-select: none; }
-        #app { position: relative; width: 100vw; height: 100vh; }
+        :root { --gold: #d4af37; --neon: #00ffea; --bg: #050505; }
+        body { margin: 0; background: var(--bg); color: white; font-family: monospace; overflow: hidden; }
         
-        #video-container { position: absolute; width: 100%; height: 100%; z-index: 1; background: #000; }
-        video { width: 100%; height: 100%; object-fit: cover; opacity: 0.6; } /* Затемнил видео для контраста */
-        #preview-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
-
-        /* Виртуальный стол */
-        #virtual-table { 
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            z-index: 10; display: none; 
-            background: radial-gradient(circle, #2a2a2a 0%, #000 100%); 
-            perspective: 1000px; 
-        }
-
-        #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 20; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: space-between; }
+        /* СКАНИРОВАНИЕ */
+        #scanner-view { position: fixed; inset: 0; display: flex; flex-direction: column; }
+        video { width: 100%; height: 100%; object-fit: cover; filter: brightness(0.6); }
+        canvas { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
         
-        /* Кнопки и плашки */
-        #top-bar { margin-top: 20px; background: rgba(0,0,0,0.8); padding: 10px 20px; border-radius: 30px; border: 1px solid #333; pointer-events: auto; backdrop-filter: blur(5px); }
-        #status-text { color: #00ffea; font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
-
-        #scan-btn { 
-            width: 80px; height: 80px; border-radius: 50%; 
-            border: 4px solid #fff; background: rgba(255, 255, 255, 0.1); 
-            margin-bottom: 50px; pointer-events: auto; cursor: pointer; 
-            display: flex; justify-content: center; align-items: center; 
-            box-shadow: 0 0 20px rgba(255,255,255,0.2); transition: 0.2s;
-        }
-        #scan-btn:active { transform: scale(0.9); background: rgba(255,255,255,0.3); }
-        #scan-btn::after { content: ""; width: 60px; height: 60px; background: #fff; border-radius: 50%; }
-
-        #reset-btn { 
-            display: none; margin-bottom: 50px; padding: 15px 40px; 
-            border: none; color: #000; background: #00ffea; 
-            border-radius: 30px; pointer-events: auto; font-weight: 900; 
-            cursor: pointer; text-transform: uppercase; font-size: 16px;
-            box-shadow: 0 0 30px rgba(0, 255, 234, 0.4);
+        /* ДИАГНОСТИКА */
+        #perf-monitor { 
+            position: absolute; top: 80px; left: 10px; z-index: 20; 
+            background: rgba(0,0,0,0.7); padding: 10px; border-left: 2px solid var(--neon);
+            font-size: 10px; line-height: 1.4; color: var(--neon); pointer-events: none;
         }
 
-        #loader { 
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-            color: #00ffea; border: 1px solid #00ffea; padding: 30px; 
-            background: rgba(0,0,0,0.95); z-index: 100; text-align: center; 
-            border-radius: 12px; font-weight: bold; box-shadow: 0 0 50px rgba(0,0,0,0.8); 
-        }
-
-        /* 3D КАРТЫ - СТАНДАРТИЗИРОВАННЫЕ */
-        .digital-card { 
-            position: absolute; transform-style: preserve-3d; 
-            transition: all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); /* Пружинистая анимация */
-            cursor: zoom-in; opacity: 0; 
-            transform: scale(0.5) translateY(100px); 
-            
-            /* ФИКСИРОВАННЫЙ РАЗМЕР В % ОТ ЭКРАНА */
-            /* Это гарантирует, что все карты будут одинаковыми */
-            width: 22vw; 
-            height: calc(22vw * 1.71); /* Пропорция Таро */
-            max-width: 150px; max-height: 256px; /* Ограничитель для ПК */
-        }
-        .digital-card.show { opacity: 1; transform: scale(1) translateY(0); }
-        
-        .card-inner { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; transition: transform 0.8s; }
-        .front, .back { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; border-radius: 8px; background-size: cover; border: 1px solid #999; box-shadow: 0 10px 30px rgba(0,0,0,0.8); }
-        .back { background-image: url('./cards/rubashka.png'); background-color: #222; transform: rotateY(0deg); }
-        .front { transform: rotateY(180deg); background-color: #000; }
-        .digital-card.flipped .card-inner { transform: rotateY(180deg); }
-        
-        /* Лейбл под картой */
-        .card-label { 
-            position: absolute; bottom: -30px; left: 50%; transform: translateX(-50%) rotateY(180deg); 
-            color: #fff; font-size: 11px; background: rgba(0,0,0,0.8); padding: 4px 8px; 
-            border-radius: 4px; border: 1px solid #444; white-space: nowrap; 
-        }
-
-        /* Зум на весь экран */
-        #zoom { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.98); z-index: 200; display: none; flex-direction: column; align-items: center; justify-content: center; pointer-events: auto; }
-        #zoom img { max-width: 90%; max-height: 80%; border: 2px solid #00ffea; box-shadow: 0 0 50px rgba(0,255,234,0.3); border-radius: 10px; }
+        .ui { position: absolute; inset: 0; z-index: 10; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; }
+        .status { background: rgba(0,0,0,0.85); padding: 20px; text-align: center; border-bottom: 1px solid var(--gold); font-size: 13px; letter-spacing: 2px; color: var(--gold); }
+        .controls { padding: 40px; display: flex; justify-content: center; gap: 20px; pointer-events: auto; }
+        .btn { width: 180px; height: 50px; border-radius: 25px; border: 1px solid var(--gold); background: rgba(212, 175, 55, 0.1); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--gold); text-transform: uppercase; font-weight: bold; }
+        .btn.active { background: var(--gold); color: black; box-shadow: 0 0 20px var(--gold); }
     </style>
 </head>
 <body>
 
-<div id="app">
-    <div id="loader">ЗАГРУЗКА AI...<br>Ищу best.onnx</div>
-    
-    <div id="video-container">
-        <video id="video" playsinline muted autoplay></video>
-        <canvas id="preview-canvas"></canvas>
+<div id="scanner-view">
+    <div id="perf-monitor">
+        ИНФЕРЕНС: <span id="inf-time">0</span> ms<br>
+        ПОТОК: <span id="fps">0</span> FPS<br>
+        ЯДРО: ORT 1.20.1 (WASM)
     </div>
-    
-    <div id="virtual-table"></div>
-    
-    <div id="ui">
-        <div id="top-bar"><span id="status-text">ГОТОВ К РАБОТЕ</span></div>
-        <div style="flex-grow:1"></div>
-        <div id="scan-btn" onclick="takeSnapshot()"></div>
-        <button id="reset-btn" onclick="resetScanner()">НОВЫЙ РАСКЛАД</button>
+    <div class="ui">
+        <div class="status" id="st">ИНИЦИАЛИЗАЦИЯ...</div>
+        <div class="controls">
+            <div id="start-btn" class="btn" onclick="toggleScan()" style="display:none">Начать тест</div>
+        </div>
     </div>
-    
-    <div id="zoom" onclick="this.style.display='none'"><img id="z-img"></div>
+    <video id="v" playsinline muted autoplay></video>
+    <canvas id="c"></canvas>
 </div>
 
 <script>
-    const CONFIG = {
-        modelPath: './tarot_best.onnx',
-        imgSize: 640,
-        confThreshold: 0.50,   // Высокий порог: только уверенные карты
-        iouThreshold: 0.15,    // Жесткое удаление наложений
-        cardsDir: './cards/'   // Локальная папка (public/cards)
-    };
+const NAMES_RU = ["Шут", "Маг", "Жрица", "Императрица", "Император", "Иерофант", "Влюбленные", "Колесница", "Сила", "Отшельник", "Колесо Фортуны", "Справедливость", "Повешенный", "Смерть", "Умеренность", "Дьявол", "Башня", "Звезда", "Луна", "Солнце", "Суд", "Мир", "Рубашка", "Туз Кубков", "2 Кубков", "3 Кубков", "4 Кубков", "5 Кубков", "6 Кубков", "7 Кубков", "8 Кубков", "9 Кубков", "10 Кубков", "Паж Кубков", "Рыцарь Кубков", "Королева Кубков", "Король Кубков", "Туз Пентаклей", "2 Пентаклей", "3 Пентаклей", "4 Пентаклей", "5 Пентаклей", "6 Пентаклей", "7 Пентаклей", "8 Пентаклей", "9 Пентаклей", "10 Пентаклей", "Паж Пентаклей", "Рыцарь Пентаклей", "Королева Пентаклей", "Король Пентаклей", "Туз Мечей", "2 Мечей", "3 Мечей", "4 Мечей", "5 Мечей", "6 Мечей", "7 Мечей", "8 Мечей", "9 Мечей", "10 Мечей", "Паж Мечей", "Рыцарь Мечей", "Королева Мечей", "Король Мечей", "Туз Жезлов", "2 Жезлов", "3 Жезлов", "4 Жезлов", "5 Жезлов", "6 Жезлов", "7 Жезлов", "8 Жезлов", "9 Жезлов", "10 Жезлов", "Паж Жезлов", "Рыцарь Жезлов", "Королева Жезлов", "Король Жезлов"];
 
-    const CARDS_EN = ["00-TheFool","01-TheMagician","02-TheHighPriestess","03-TheEmpress","04-TheEmperor","05-TheHierophant","06-TheLovers","07-TheChariot","08-Strength","09-TheHermit","10-WheelOfFortune","11-Justice","12-TheHangedMan","13-Death","14-Temperance","15-TheDevil","16-TheTower","17-TheStar","18-TheMoon","19-TheSun","20-Judgement","21-TheWorld","CardBacks","Cups01","Cups02","Cups03","Cups04","Cups05","Cups06","Cups07","Cups08","Cups09","Cups10","Cups11","Cups12","Cups13","Cups14","Pentacles01","Pentacles02","Pentacles03","Pentacles04","Pentacles05","Pentacles06","Pentacles07","Pentacles08","Pentacles09","Pentacles10","Pentacles11","Pentacles12","Pentacles13","Pentacles14","Swords01","Swords02","Swords03","Swords04","Swords05","Swords06","Swords07","Swords08","Swords09","Swords10","Swords11","Swords12","Swords13","Swords14","Wands01","Wands02","Wands03","Wands04","Wands05","Wands06","Wands07","Wands08","Wands09","Wands10","Wands11","Wands12","Wands13","Wands14"];
-    const CARDS_RU = ["Шут","Маг","Жрица","Императрица","Император","Жрец","Влюбленные","Колесница","Сила","Отшельник","Колесо Фортуны","Справедливость","Повешенный","Смерть","Умеренность","Дьявол","Башня","Звезда","Луна","Солнце","Суд","Мир","РУБАШКА","Туз Кубков","2 Кубков","3 Кубков","4 Кубков","5 Кубков","6 Кубков","7 Кубков","8 Кубков","9 Кубков","10 Кубков","Паж Кубков","Рыцарь Кубков","Королева Кубков","Король Кубков","Туз Пентаклей","2 Пентаклей","3 Пентаклей","4 Пентаклей","5 Пентаклей","6 Пентаклей","7 Пентаклей","8 Пентаклей","9 Пентаклей","10 Пентаклей","Паж Пентаклей","Рыцарь Пентаклей","Королева Пентаклей","Король Пентаклей","Туз Мечей","2 Мечей","3 Мечей","4 Мечей","5 Мечей","6 Мечей","7 Мечей","8 Мечей","9 Мечей","10 Мечей","Паж Мечей","Рыцарь Мечей","Королева Мечей","Король Мечей","Туз Жезлов","2 Жезлов","3 Жезлов","4 Жезлов","5 Жезлов","6 Жезлов","7 Жезлов","8 Жезлов","9 Жезлов","10 Жезлов","Паж Жезлов","Рыцарь Жезлов","Королева Жезлов","Король Жезлов"];
+let session, video, canvas, ctx, isScanning = false;
+let lastTime = 0, frameCount = 0, fps = 0;
 
-    let session, video, canvas, ctx, isPaused = false;
-    const loader = document.getElementById('loader');
-    const status = document.getElementById('status-text');
+async function init() {
+    try {
+        ort.env.wasm.numThreads = 1;
+        ort.env.wasm.proxy = true;
+        const res = await fetch('tarot_best.onnx');
+        const buf = await res.arrayBuffer();
+        session = await ort.InferenceSession.create(buf, { executionProviders: ['wasm'] });
+        
+        video = document.getElementById('v');
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        video.srcObject = stream;
+        video.onloadedmetadata = () => {
+            canvas = document.getElementById('c');
+            canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+            ctx = canvas.getContext('2d');
+            document.getElementById('start-btn').style.display = 'flex';
+            document.getElementById('st').innerText = "ТЕСТОВАЯ СРЕДА ГОТОВА";
+            loop();
+        };
+    } catch (e) { alert(e); }
+}
 
-    async function init() {
-        try {
-            ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/";
-            session = await ort.InferenceSession.create(CONFIG.modelPath, { executionProviders: ['wasm'] });
-            
-            video = document.getElementById('video');
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: 'environment', width: { ideal: 1920 } } 
-            });
-            video.srcObject = stream;
-            video.onloadedmetadata = () => { 
-                video.play(); 
-                canvas = document.getElementById('preview-canvas'); ctx = canvas.getContext('2d');
-                canvas.width = window.innerWidth; canvas.height = window.innerHeight;
-                loader.style.display = 'none'; 
-                status.innerText = "НАВЕДИ И НАЖМИ КНОПКУ";
-                loopPreview(); 
-            };
-        } catch(e) {
-            console.error(e);
-            loader.innerText = "ОШИБКА: " + e.message;
-            loader.style.borderColor = "red";
-        }
-    }
-    window.onload = init;
+function toggleScan() {
+    isScanning = !isScanning;
+    document.getElementById('start-btn').classList.toggle('active');
+    document.getElementById('start-btn').innerText = isScanning ? "СТОП" : "НАЧАТЬ ТЕСТ";
+}
 
-    // === ПРИЦЕЛ (Легкий режим) ===
-    async function loopPreview() {
-        if(isPaused) return; 
-        if(Date.now() % 200 < 30) { // 5 FPS превью
-            try {
-                const {boxes} = await runAI(0,0,video.videoWidth,video.videoHeight);
-                drawPreview(boxes);
-            } catch(e){}
-        }
-        requestAnimationFrame(loopPreview);
+async function loop() {
+    const now = performance.now();
+    frameCount++;
+    if (now - lastTime >= 1000) {
+        fps = frameCount;
+        document.getElementById('fps').innerText = fps;
+        frameCount = 0;
+        lastTime = now;
     }
 
-    function drawPreview(boxes) {
+    if (isScanning) {
+        const startInf = performance.now();
+        
+        const off = document.createElement('canvas'); off.width = off.height = 640;
+        const oCtx = off.getContext('2d'); oCtx.drawImage(video, 0, 0, 640, 640);
+        const pix = oCtx.getImageData(0,0,640,640).data;
+        const input = new Float32Array(3 * 640 * 640);
+        for (let i=0; i<640*640; i++) {
+            input[i] = pix[i*4]/255;
+            input[i+640*640] = pix[i*4+1]/255;
+            input[i+2*640*640] = pix[i*4+2]/255;
+        }
+
+        const tensor = new ort.Tensor('float32', input, [1, 3, 640, 640]);
+        const results = await session.run({ [session.inputNames[0]]: tensor });
+        
+        const endInf = performance.now();
+        document.getElementById('inf-time').innerText = (endInf - startInf).toFixed(1);
+        
+        process(results[session.outputNames[0]].data);
+    } else {
         ctx.clearRect(0,0,canvas.width,canvas.height);
-        const s = Math.max(canvas.width/video.videoWidth, canvas.height/video.videoHeight);
-        const dx = (canvas.width-video.videoWidth*s)/2, dy = (canvas.height-video.videoHeight*s)/2;
+    }
+    requestAnimationFrame(loop);
+}
+
+function process(data) {
+    const anchors = 8400;
+    const sx = canvas.width / 640, sy = canvas.height / 640;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    
+    for (let i=0; i<anchors; i++) {
+        let conf = 0, cls = -1;
+        for (let c=4; c<83; c++) {
+            if (data[c*anchors+i] > conf) { conf = data[c*anchors+i]; cls = c-4; }
+        }
         
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = "rgba(0, 255, 234, 0.5)"; // Тонкий прицел
-        
-        boxes.forEach(b => {
-            const x = b.x*s+dx, y = b.y*s+dy, w = b.w*s, h = b.h*s;
+        // Порог 0.55 для чистоты эксперимента
+        if (conf > 0.55) {
+            const x = data[0*anchors+i]*sx, y = data[1*anchors+i]*sy;
+            const w = data[2*anchors+i]*sx, h = data[3*anchors+i]*sy;
+
+            ctx.strokeStyle = "#00ffea"; ctx.lineWidth = 1;
             ctx.strokeRect(x-w/2, y-h/2, w, h);
-        });
-        
-        if (boxes.length > 0) status.innerText = `ВИЖУ КАРТ: ${boxes.length}`;
-        else status.innerText = "ПОИСК...";
-    }
-
-    // === ФОТОГРАФИРОВАНИЕ И АНАЛИЗ ===
-    async function takeSnapshot() {
-        if(isPaused) return;
-        isPaused = true;
-        
-        video.pause(); // Фриз видео
-        document.getElementById('scan-btn').style.display = 'none';
-        loader.style.display = 'block';
-        loader.innerText = "ОБРАБОТКА СНИМКА...";
-        ctx.clearRect(0,0,canvas.width,canvas.height); // Убираем прицел
-
-        try {
-            const vw = video.videoWidth, vh = video.videoHeight;
-            let allBoxes = [];
-
-            // 1. Глобальный скан
-            const global = await runAI(0,0,vw,vh);
-            allBoxes.push(...global.boxes);
-
-            // 2. SAHI (Сектора)
-            const sw = vw * 0.55, sh = vh * 0.55;
-            const sectors = [{x:0,y:0}, {x:vw-sw,y:0}, {x:0,y:vh-sh}, {x:vw-sw,y:vh-sh}];
-
-            for(let i=0; i<sectors.length; i++) {
-                const s = sectors[i];
-                const res = await runAI(s.x, s.y, sw, sh);
-                res.boxes.forEach(b => allBoxes.push({
-                    x: b.x + s.x, y: b.y + s.y, w: b.w, h: b.h, cls: b.cls, score: b.score
-                }));
-                await new Promise(r => setTimeout(r, 10)); // Даем UI подышать
-            }
-
-            // 3. УМНАЯ ФИЛЬТРАЦИЯ (Highlander Rule)
-            // Оставляем только одну карту каждого класса с лучшим Score
-            const uniqueCards = new Map();
-            allBoxes.forEach(b => {
-                if (!uniqueCards.has(b.cls) || uniqueCards.get(b.cls).score < b.score) {
-                    uniqueCards.set(b.cls, b);
-                }
-            });
-            let distinctBoxes = Array.from(uniqueCards.values());
             
-            // 4. Финальный NMS (на всякий случай)
-            const finalBoxes = nms(distinctBoxes);
-            
-            renderResult(finalBoxes);
-
-        } catch(e) {
-            alert(e);
-            resetScanner();
+            // ВЫВОД ТОЧНОГО ПРОЦЕНТА
+            ctx.fillStyle = "#00ffea"; ctx.font = "12px monospace";
+            const label = `${NAMES_RU[cls]} ${(conf * 100).toFixed(1)}%`;
+            ctx.fillText(label, x-w/2, y-h/2-5);
         }
     }
+}
 
-    async function runAI(sx,sy,sw,sh) {
-        const tCanvas = document.createElement('canvas'); 
-        tCanvas.width = CONFIG.imgSize; tCanvas.height = CONFIG.imgSize;
-        const tCtx = tCanvas.getContext('2d');
-        const scale = Math.min(CONFIG.imgSize/sw, CONFIG.imgSize/sh);
-        const tx = (CONFIG.imgSize - sw*scale)/2, ty = (CONFIG.imgSize - sh*scale)/2;
-        
-        tCtx.fillStyle = "#000"; tCtx.fillRect(0,0,CONFIG.imgSize,CONFIG.imgSize);
-        tCtx.drawImage(video, sx,sy,sw,sh, tx,ty,sw*scale,sh*scale);
-        
-        const imgData = tCtx.getImageData(0,0,CONFIG.imgSize,CONFIG.imgSize).data;
-        const float32 = new Float32Array(3*CONFIG.imgSize*CONFIG.imgSize);
-        for(let i=0; i<CONFIG.imgSize**2; i++) {
-            float32[i] = imgData[i*4]/255.0; 
-            float32[CONFIG.imgSize**2+i] = imgData[i*4+1]/255.0; 
-            float32[2*CONFIG.imgSize**2+i] = imgData[i*4+2]/255.0;
-        }
-
-        const tensor = new ort.Tensor('float32', float32, [1, 3, CONFIG.imgSize, CONFIG.imgSize]);
-        const res = await session.run({ "images": tensor });
-        const output = res[session.outputNames[0]].data;
-
-        const boxes = [];
-        const numAnchors = 8400; 
-        const numClasses = 79;
-        
-        for(let i=0; i<numAnchors; i++) {
-            let max=0, cls=-1;
-            for(let c=0; c<numClasses; c++) {
-                const val = output[(c+4)*numAnchors + i];
-                if(val > max) { max=val; cls=c; }
-            }
-            if(max > CONFIG.confThreshold) {
-                boxes.push({
-                    x: (output[0*numAnchors+i] - tx)/scale,
-                    y: (output[1*numAnchors+i] - ty)/scale,
-                    w: output[2*numAnchors+i]/scale,
-                    h: output[3*numAnchors+i]/scale,
-                    score: max, cls: cls
-                });
-            }
-        }
-        
-        return { boxes: boxes.map(b => ({
-            x: b.x + sx, y: b.y + sy, w: b.w, h: b.h, cls: b.cls, score: b.score
-        }))};
-    }
-
-    function nms(boxes) {
-        boxes.sort((a,b) => b.score - a.score);
-        const res = [];
-        while(boxes.length) {
-            const best = boxes.shift();
-            res.push(best);
-            boxes = boxes.filter(b => {
-                const x1 = Math.max(best.x - best.w/2, b.x - b.w/2);
-                const y1 = Math.max(best.y - best.h/2, b.y - best.h/2);
-                const x2 = Math.min(best.x + best.w/2, b.x + b.w/2);
-                const y2 = Math.min(best.y + best.h/2, b.y + b.h/2);
-                const inter = Math.max(0, x2-x1) * Math.max(0, y2-y1);
-                const union = (best.w*best.h) + (b.w*b.h) - inter;
-                return (inter/union) < CONFIG.iouThreshold;
-            });
-        }
-        return res;
-    }
-
-    function renderResult(boxes) {
-        loader.style.display = 'none';
-        document.getElementById('video-container').style.opacity = 0;
-        document.getElementById('virtual-table').style.display = 'block';
-        document.getElementById('reset-btn').style.display = 'flex';
-        status.innerText = `ИТОГ: ${boxes.length} КАРТ`;
-        
-        const tbl = document.getElementById('virtual-table');
-        tbl.innerHTML = '';
-
-        const s = Math.max(window.innerWidth/video.videoWidth, window.innerHeight/video.videoHeight);
-        const dx = (window.innerWidth - video.videoWidth*s)/2;
-        const dy = (window.innerHeight - video.videoHeight*s)/2;
-
-        boxes.forEach((b, i) => {
-            const el = document.createElement('div');
-            el.className = 'digital-card';
-            
-            // ВАЖНО: Мы не используем ширину рамки (b.w), мы берем только КООРДИНАТЫ ЦЕНТРА
-            // Размер карты теперь фиксированный и красивый (через CSS)
-            el.style.left = (b.x * s + dx - (window.innerWidth*0.22)/2) + "px"; // Центрируем нашу 22vw карту
-            el.style.top = (b.y * s + dy - (window.innerWidth*0.22*1.71)/2) + "px";
-            el.style.zIndex = i+10;
-            
-            const isBack = b.cls === 22;
-            const imgPath = isBack 
-                ? CONFIG.cardsDir + 'rubashka.png'
-                : CONFIG.cardsDir + CARDS_EN[b.cls] + ".jpg";
-            
-            const labelText = CARDS_RU[b.cls];
-
-            el.innerHTML = `
-                <div class="card-inner">
-                    <div class="back"></div>
-                    <div class="front" style="background-image: url('${imgPath}')">
-                        <div class="card-label">${labelText}</div>
-                    </div>
-                </div>`;
-            
-            el.onclick = () => {
-                document.getElementById('z-img').src = imgPath;
-                document.getElementById('zoom').style.display = 'flex';
-            };
-            
-            tbl.appendChild(el);
-            
-            setTimeout(() => {
-                el.classList.add('show');
-                setTimeout(() => el.classList.add('flipped'), 200);
-            }, i * 150);
-        });
-    }
-
-    function resetScanner() {
-        isPaused = false;
-        document.getElementById('virtual-table').style.display = 'none';
-        document.getElementById('video-container').style.opacity = 1;
-        document.getElementById('reset-btn').style.display = 'none';
-        document.getElementById('scan-btn').style.display = 'flex';
-        video.play();
-        status.innerText = "ГОТОВ";
-        loopPreview();
-    }
+window.onload = init;
 </script>
 </body>
 </html>
