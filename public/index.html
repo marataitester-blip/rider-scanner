@@ -10,96 +10,76 @@
         :root { --gold: #d4af37; --neon: #00ffea; --bg: #000; }
         body { margin: 0; background: var(--bg); overflow: hidden; font-family: 'Roboto', sans-serif; color: var(--gold); }
         
-        /* КОНТЕЙНЕРЫ */
+        /* СТАРТОВЫЙ ЭКРАН */
+        #start-screen { position: absolute; inset:0; background:#000; z-index:999; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: 1s; }
+        .aura-logo { font-family: 'Cinzel', serif; font-size: 38px; color: var(--gold); text-align: center; letter-spacing: 5px; animation: pulse 3s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 0.7; transform: scale(0.98); } 50% { opacity: 1; transform: scale(1.02); } }
+        
+        /* СКАНЕР */
         #container { position: relative; width: 100vw; height: 100vh; }
         video#input-video { width: 100%; height: 100%; object-fit: cover; display: none; }
-        canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 5; pointer-events: none; }
+        canvas { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
 
-        /* ДИАГНОСТИКА */
-        #diag-monitor { 
-            position: absolute; top: 120px; left: 15px; z-index: 25; 
-            background: rgba(0,0,0,0.7); padding: 10px; border-left: 2px solid var(--neon);
-            font-family: monospace; font-size: 10px; color: var(--neon); pointer-events: none;
-        }
+        /* ИНТЕРФЕЙС */
+        .ui { position: absolute; inset: 0; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; z-index: 10; }
+        .top-panel { background: rgba(0,0,0,0.85); padding: 20px; pointer-events: auto; border-bottom: 1px solid var(--gold); }
+        input { background: rgba(255,255,255,0.05); border: 1px solid var(--gold); color: #fff; padding: 12px; border-radius: 5px; width: 90%; display: block; margin: 0 auto; outline: none; font-size: 16px; }
 
-        /* ИНТЕРФЕЙС УПРАВЛЕНИЯ */
-        .ui-layer { position: absolute; inset: 0; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; z-index: 10; }
-        .top-panel { background: rgba(0,0,0,0.85); padding: 15px; pointer-events: auto; border-bottom: 1px solid var(--gold); }
-        input[type="text"] { background: rgba(255,255,255,0.1); border: 1px solid var(--gold); color: #fff; padding: 12px; border-radius: 5px; font-size: 16px; width: 90%; display: block; margin: 0 auto; outline: none; }
-        
-        .expert-switch { display: flex; justify-content: center; gap: 15px; margin-top: 15px; }
-        .expert-btn { background: #111; border: 1px solid #444; color: #777; padding: 10px 20px; border-radius: 25px; cursor: pointer; font-size: 12px; font-weight: bold; transition: 0.4s; }
-        .expert-btn.active.margot { background: #5a2a4a; border-color: #ff69b4; color: #fff; box-shadow: 0 0 15px #ff69b4; }
-        .expert-btn.active.messire { background: #1a2a3a; border-color: #4da6ff; color: #fff; box-shadow: 0 0 15px #4da6ff; }
+        /* СЧЕТЧИК КАРТ (НЕОНОВЫЙ) */
+        #counter-box { position: absolute; bottom: 130px; left: 50%; transform: translateX(-50%); text-align: center; }
+        #main-count { font-family: 'Cinzel', serif; font-size: 36px; color: var(--gold); text-shadow: 0 0 15px var(--gold); transition: 0.3s; }
+        .count-active { color: var(--neon) !important; text-shadow: 0 0 25px var(--neon) !important; transform: scale(1.1); }
 
-        .bottom-panel { padding: 35px; pointer-events: auto; text-align: center; background: linear-gradient(to top, rgba(0,0,0,1), transparent); }
-        .scan-btn { background: var(--gold); color: #000; border: none; width: 75px; height: 75px; border-radius: 50%; font-size: 35px; box-shadow: 0 0 25px var(--gold); cursor: pointer; transition: 0.2s; }
-        .scan-btn:active { transform: scale(0.9); }
+        .bottom-panel { padding: 40px; pointer-events: auto; text-align: center; background: linear-gradient(to top, #000, transparent); }
+        .scan-btn { background: var(--gold); border: none; width: 75px; height: 75px; border-radius: 50%; font-size: 35px; box-shadow: 0 0 25px var(--gold); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
 
         /* ВИРТУАЛЬНЫЙ СТОЛ */
-        #result-box { position: absolute; inset: 0; background: radial-gradient(#111, #000); z-index: 100; display: none; flex-direction: column; }
-        .result-scroll-area { flex: 1; overflow-y: auto; padding: 25px; display: flex; flex-direction: column; align-items: center; }
-        
-        .cards-grid { 
-            display: grid; 
-            grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); 
-            gap: 15px; width: 100%; max-width: 800px; margin-bottom: 30px; 
-        }
+        #table-view { position: absolute; inset: 0; background: radial-gradient(#151515, #000); z-index: 100; display: none; flex-direction: column; }
+        .scroll-area { flex: 1; overflow-y: auto; padding: 25px; display: flex; flex-direction: column; align-items: center; }
+        .grid-spread { display: grid; grid-template-columns: repeat(auto-fit, minmax(85px, 1fr)); gap: 12px; width: 100%; max-width: 900px; margin-bottom: 30px; }
+        .card-box { display: flex; flex-direction: column; align-items: center; cursor: pointer; animation: fadeIn 0.5s ease; }
+        .card-asset { width: 100%; border-radius: 6px; border: 1px solid var(--gold); box-shadow: 0 5px 15px rgba(0,0,0,0.7); }
+        .card-title { font-size: 10px; margin-top: 8px; color: #fff; text-align: center; text-transform: uppercase; letter-spacing: 1px; }
 
-        .card-item { display: flex; flex-direction: column; align-items: center; cursor: pointer; animation: cardEntry 0.5s ease-out; }
-        @keyframes cardEntry { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        
-        .card-visual { width: 100%; border-radius: 8px; border: 1px solid var(--gold); box-shadow: 0 5px 15px rgba(0,0,0,0.6); }
-        .card-name-mini { font-size: 10px; margin-top: 8px; color: #fff; text-align: center; text-transform: uppercase; letter-spacing: 1px; }
-
-        /* ЗУМ И СТАРТ */
-        #zoom-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.98); z-index: 200; display: none; flex-direction: column; justify-content: center; align-items: center; }
-        #start-screen { position: absolute; inset:0; background:#000; z-index:999; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: 1s; }
-        .logo { font-family: 'Cinzel', serif; font-size: 35px; color: var(--gold); text-align: center; letter-spacing: 5px; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
 
 <div id="container">
     <div id="start-screen">
-        <div class="logo">AURA SYSTEM<br><span style="font-size: 12px; color: #666;">NEURAL CORE 1.25</span></div>
-        <button id="big-start-btn" onclick="initSystem()" style="margin-top:60px; padding: 18px 45px; background: transparent; color: var(--gold); border: 2px solid var(--gold); border-radius: 40px; font-family: 'Cinzel'; cursor: pointer; font-weight: bold;">ВОЙТИ В ПОТОК</button>
+        <div class="aura-logo">AURA SYSTEM<br><span style="font-size: 12px; letter-spacing: 3px; color: #666;">MONOLITH CORE 1.40</span></div>
+        <button id="start-btn" onclick="init()" style="margin-top:50px; padding: 15px 50px; background: transparent; color: var(--gold); border: 2px solid var(--gold); border-radius: 30px; font-family: 'Cinzel'; cursor: pointer; font-weight: bold;">ОТКРЫТЬ ПОТОК</button>
         <div id="loader" style="display:none; color: var(--neon); margin-top: 30px; font-family: monospace; font-size: 10px;">СИНХРОНИЗАЦИЯ...</div>
-    </div>
-
-    <div id="diag-monitor">
-        INF: <span id="inf-val">0</span>ms | FPS: <span id="fps-val">0</span>
     </div>
 
     <video id="input-video" playsinline muted autoplay></video>
     <canvas id="canvas"></canvas>
     
-    <div class="ui-layer">
+    <div class="ui">
         <div class="top-panel">
-            <input type="text" id="questionInput" placeholder="О чем молчат карты?">
-            <div class="expert-switch">
-                <div class="expert-btn active margot" onclick="setExpert('margot')">МАРГО</div>
-                <div class="expert-btn" onclick="setExpert('messire')">МЕССИР</div>
+            <input type="text" id="qInput" placeholder="О чем спросим Вселенную?">
+        </div>
+        
+        <div id="counter-box">
+            <div style="font-size: 9px; letter-spacing: 3px; margin-bottom: 5px;">АРКАНОВ ЗАФИКСИРОВАНО</div>
+            <div id="main-count">0 / 11</div>
+        </div>
+
+        <div class="bottom-panel">
+            <button class="scan-btn" onclick="openTable()">👁️</button>
+        </div>
+    </div>
+
+    <div id="table-view">
+        <div class="scroll-area">
+            <h2 style="font-family: 'Cinzel'; margin-bottom: 25px; letter-spacing: 4px; text-align: center;">ВИРТУАЛЬНЫЙ СТОЛ</h2>
+            <div id="spread-grid" class="grid-spread"></div>
+            <div id="ai-text" style="color: #888; font-size: 13px; line-height: 1.7; background: #0a0a0a; padding: 25px; border-radius: 10px; border: 1px solid #1a1a1a; width: 100%; max-width: 600px; box-sizing: border-box;">
+                Система «Живое Таро» просканировала геометрию вашего расклада.
             </div>
         </div>
-        <div id="status" style="text-align: center; font-size: 11px; letter-spacing: 2px;">ОЖИДАНИЕ...</div>
-        <div class="bottom-panel">
-            <button class="scan-btn" onclick="captureRead()">👁️</button>
-        </div>
-    </div>
-
-    <div id="result-box">
-        <div class="result-scroll-area">
-            <h2 id="res-header" style="font-family: 'Cinzel'; margin-bottom: 25px; letter-spacing: 5px;">ОТВЕТ</h2>
-            <div id="cards-container" class="cards-grid"></div>
-            <div id="ai-response" style="color: #aaa; font-size: 14px; line-height: 1.7; background: #0a0a0a; padding: 25px; border-radius: 12px; border: 1px solid #1a1a1a; width: 100%; max-width: 600px; box-sizing: border-box;"></div>
-        </div>
-        <button onclick="closeResult()" style="padding: 25px; background: #000; color: var(--gold); border: none; border-top: 1px solid var(--gold); cursor: pointer; font-family: 'Cinzel'; font-weight: bold; letter-spacing: 2px;">НОВЫЙ СКАН</button>
-    </div>
-
-    <div id="zoom-modal" onclick="this.style.display='none'">
-        <h3 id="zoom-title" style="font-family: 'Cinzel'; color: var(--gold); margin-bottom: 20px;"></h3>
-        <div id="zoom-content"></div>
+        <button onclick="reset()" style="padding: 25px; background: #000; color: var(--gold); border: none; border-top: 1px solid var(--gold); cursor: pointer; font-family: 'Cinzel'; font-weight: bold;">СБРОСИТЬ СКАН</button>
     </div>
 </div>
 
@@ -107,15 +87,15 @@
     const NAMES_RU = ["Шут", "Маг", "Жрица", "Императрица", "Император", "Иерофант", "Влюбленные", "Колесница", "Сила", "Отшельник", "Колесо Фортуны", "Справедливость", "Повешенный", "Смерть", "Умеренность", "Дьявол", "Башня", "Звезда", "Луна", "Солнце", "Суд", "Мир", "Рубашка", "Туз Кубков", "2 Кубков", "3 Кубков", "4 Кубков", "5 Кубков", "6 Кубков", "7 Кубков", "8 Кубков", "9 Кубков", "10 Кубков", "Паж Кубков", "Рыцарь Кубков", "Королева Кубков", "Король Кубков", "Туз Пентаклей", "2 Пентаклей", "3 Пентаклей", "4 Пентаклей", "5 Пентаклей", "6 Пентаклей", "7 Пентаклей", "8 Пентаклей", "9 Пентаклей", "10 Пентаклей", "Паж Пентаклей", "Рыцарь Пентаклей", "Королева Пентаклей", "Король Пентаклей", "Туз Мечей", "2 Мечей", "3 Мечей", "4 Мечей", "5 Мечей", "6 Мечей", "7 Мечей", "8 Мечей", "9 Мечей", "10 Мечей", "Паж Мечей", "Рыцарь Мечей", "Королева Мечей", "Король Мечей", "Туз Жезлов", "2 Жезлов", "3 Жезлов", "4 Жезлов", "5 Жезлов", "6 Жезлов", "7 Жезлов", "8 Жезлов", "9 Жезлов", "10 Жезлов", "Паж Жезлов", "Рыцарь Жезлов", "Королева Жезлов", "Король Жезлов"];
     const NAMES_EN = ["00-TheFool","01-TheMagician","02-TheHighPriestess","03-TheEmpress","04-TheEmperor","05-TheHierophant","06-TheLovers","07-TheChariot","08-Strength","09-TheHermit","10-WheelOfFortune","11-Justice","12-TheHangedMan","13-Death","14-Temperance","15-TheDevil","16-TheTower","17-TheStar","18-TheMoon","19-TheSun","20-Judgement","21-TheWorld","CardBacks","Cups01","Cups02","Cups03","Cups04","Cups05","Cups06","Cups07","Cups08","Cups09","Cups10","Cups11","Cups12","Cups13","Cups14","Pentacles01","Pentacles02","Pentacles03","Pentacles04","Pentacles05","Pentacles06","Pentacles07","Pentacles08","Pentacles09","Pentacles10","Pentacles11","Pentacles12","Pentacles13","Pentacles14","Swords01","Swords02","Swords03","Swords04","Swords05","Swords06","Swords07","Swords08","Swords09","Swords10","Swords11","Swords12","Swords13","Swords14","Wands01","Wands02","Wands03","Wands04","Wands05","Wands06","Wands07","Wands08","Wands09","Wands10","Wands11","Wands12","Wands13","Wands14"];
 
-    let session, video, canvas, ctx, currentExpert = 'margot';
+    let session, video, canvas, ctx;
     let locked = new Map(), buffer = new Map();
-    let lastTime = 0, frames = 0;
 
-    async function initSystem() {
-        document.getElementById('big-start-btn').style.display = 'none';
+    async function init() {
         document.getElementById('loader').style.display = 'block';
         try {
+            ort.env.wasm.numThreads = 1;
             session = await ort.InferenceSession.create('./tarot_best.onnx', { executionProviders: ['wasm'] });
+            
             video = document.getElementById('input-video');
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
             video.srcObject = stream;
@@ -126,13 +106,13 @@
                 document.getElementById('start-screen').style.opacity = '0';
                 setTimeout(() => document.getElementById('start-screen').style.display = 'none', 1000);
                 video.style.display = 'block';
-                requestAnimationFrame(loop);
+                loop();
             };
-        } catch (e) { alert("Ошибка ядра: " + e); }
+        } catch (e) { alert("Ошибка: " + e); }
     }
 
-    // ЛОГИКА NMS (ПОДАВЛЕНИЕ НАЛОЖЕНИЙ)
-    function calculateIOU(b1, b2) {
+    // Фильтр перекрытий (NMS)
+    function getIOU(b1, b2) {
         const x1 = Math.max(b1.x - b1.w/2, b2.x - b2.w/2);
         const y1 = Math.max(b1.y - b1.h/2, b2.y - b2.h/2);
         const x2 = Math.min(b1.x + b1.w/2, b2.x + b2.w/2);
@@ -142,74 +122,62 @@
         return inter / union;
     }
 
-    async function loop(now) {
-        frames++;
-        if (now - lastTime >= 1000) {
-            document.getElementById('fps-val').innerText = frames;
-            frames = 0; lastTime = now;
-        }
-
-        const startInf = performance.now();
+    async function loop() {
         const mat = document.createElement('canvas'); mat.width = mat.height = 640;
         mat.getContext('2d').drawImage(video, 0, 0, 640, 640);
         const pix = mat.getContext('2d').getImageData(0,0,640,640).data;
-        
         const input = new Float32Array(3 * 640 * 640);
         for (let i=0; i<640*640; i++) {
-            input[i] = pix[i*4]/255;
-            input[640*640+i] = pix[i*4+1]/255;
-            input[2*640*640+i] = pix[i*4+2]/255;
+            input[i] = pix[i*4]/255; input[640*640+i] = pix[i*4+1]/255; input[2*640*640+i] = pix[i*4+2]/255;
         }
 
         const tensor = new ort.Tensor('float32', input, [1, 3, 640, 640]);
-        const results = await session.run({ [session.inputNames[0]]: tensor });
-        document.getElementById('inf-val').innerText = (performance.now() - startInf).toFixed(0);
-        
-        process(results[session.outputNames[0]].data);
+        const res = await session.run({ [session.inputNames[0]]: tensor });
+        parse(res[session.outputNames[0]].data);
         requestAnimationFrame(loop);
     }
 
-    function process(data) {
+    function parse(data) {
         const anchors = 8400;
         const sx = canvas.width / 640, sy = canvas.height / 640;
         ctx.clearRect(0,0,canvas.width,canvas.height);
 
-        let candidates = [];
+        let cands = [];
         for (let i=0; i<anchors; i++) {
             let conf = 0, cls = -1;
             for (let c=4; c<83; c++) {
                 if (data[c*anchors+i] > conf) { conf = data[c*anchors+i]; cls = c-4; }
             }
-            // Порог поиска - 0.40 для гибкости
-            if (conf > 0.40) {
-                candidates.push({ conf, cls, x: data[0*anchors+i]*sx, y: data[1*anchors+i]*sy, w: data[2*anchors+i]*sx, h: data[3*anchors+i]*sy });
-            }
+            if (conf > 0.45) cands.push({ conf, cls, x: data[0*anchors+i]*sx, y: data[1*anchors+i]*sy, w: data[2*anchors+i]*sx, h: data[3*anchors+i]*sy });
         }
 
-        candidates.sort((a,b) => b.conf - a.conf);
+        cands.sort((a,b) => b.conf - a.conf);
         let filtered = [];
-        candidates.forEach(c => {
-            if (!filtered.some(f => calculateIOU(c, f) > 0.45)) filtered.push(c);
-        });
+        cands.forEach(c => { if (!filtered.some(f => getIOU(c, f) > 0.45)) filtered.push(c); });
 
         filtered.forEach(item => {
-            if (locked.has(item.cls)) { drawBox(item, "#d4af37", true); return; }
-            
-            // Порог фиксации - 0.65 для железобетонности
+            if (locked.has(item.cls)) { render(item, "#d4af37", true); return; }
             if (item.conf > 0.65) {
                 let b = buffer.get(item.cls) || { count: 0 };
                 b.count++; buffer.set(item.cls, b);
                 if (b.count > 12) {
                     locked.set(item.cls, { ...item, name: NAMES_RU[item.cls], file: NAMES_EN[item.cls] });
+                    updateCounter();
                     if (navigator.vibrate) navigator.vibrate(40);
                 }
-                drawBox(item, "#00ffea", false);
+                render(item, "#00ffea", false);
             }
         });
-        document.getElementById('status').innerText = `АУРА-ЗАХВАТ: ${locked.size} / 11`;
     }
 
-    function drawBox(item, col, isL) {
+    function updateCounter() {
+        const el = document.getElementById('main-count');
+        el.innerText = `${locked.size} / 11`;
+        el.classList.add('count-active');
+        setTimeout(() => el.classList.remove('count-active'), 400);
+    }
+
+    function render(item, col, isL) {
         ctx.strokeStyle = col; ctx.lineWidth = isL ? 2 : 1;
         ctx.setLineDash(isL ? [] : [5,5]);
         ctx.strokeRect(item.x-item.w/2, item.y-item.h/2, item.w, item.h);
@@ -217,30 +185,26 @@
         ctx.fillText(isL ? item.name : `${(item.conf*100).toFixed(0)}%`, item.x-item.w/2, item.y-item.h/2-10);
     }
 
-    function captureRead() {
+    function openTable() {
         if (locked.size === 0) return;
-        const container = document.getElementById('cards-container');
-        container.innerHTML = "";
-        const sorted = Array.from(locked.values()).sort((a,b) => a.x - b.x);
+        const grid = document.getElementById('spread-grid');
+        grid.innerHTML = "";
+        // Сортировка по физическому месту (геометрия стола)
+        const sorted = Array.from(locked.values()).sort((a,b) => (a.y*canvas.width + a.x) - (b.y*canvas.width + b.x));
         sorted.forEach(c => {
             const div = document.createElement('div');
-            div.className = 'card-item';
-            div.onclick = () => {
-                document.getElementById('zoom-title').innerText = c.name;
-                document.getElementById('zoom-content').innerHTML = `<img src="/cards/${c.file}.jpg" style="max-height: 70vh; border: 1px solid var(--gold); border-radius: 10px;">`;
-                document.getElementById('zoom-modal').style.display = 'flex';
-            };
-            div.innerHTML = `<img src="/cards/${c.file}.jpg" class="card-visual" onerror="this.src='https://via.placeholder.com/100x150?text=CARD'"><div class="card-name-mini">${c.name}</div>`;
-            container.appendChild(div);
+            div.className = 'card-box';
+            div.innerHTML = `<img src="/cards/${c.file}.jpg" class="card-asset" onerror="this.src='https://via.placeholder.com/100x150?text=AURA'"><div class="card-title">${c.name}</div>`;
+            grid.appendChild(div);
         });
-        document.getElementById('ai-response').innerText = `Мастер ${currentExpert.toUpperCase()} готов толковать твой путь. Карты легли в идеальный строй.`;
-        document.getElementById('result-box').style.display = 'flex';
+        document.getElementById('table-view').style.display = 'flex';
     }
 
-    function setExpert(n) { currentExpert = n; document.querySelectorAll('.expert-btn').forEach(b => b.classList.remove('active', 'margot', 'messire')); event.target.classList.add('active', n); }
-    function closeResult() { document.getElementById('result-box').style.display = 'none'; locked.clear(); buffer.clear(); }
-
-    window.onload = () => {};
+    function reset() { 
+        document.getElementById('table-view').style.display = 'none'; 
+        locked.clear(); buffer.clear(); 
+        document.getElementById('main-count').innerText = "0 / 11";
+    }
 </script>
 </body>
 </html>
